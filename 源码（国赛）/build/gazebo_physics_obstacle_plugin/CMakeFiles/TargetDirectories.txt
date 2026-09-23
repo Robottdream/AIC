@@ -1,0 +1,10 @@
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/uninstall.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/gazebo_physics_obstacle_plugin_uninstall.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/simple_move_plugin.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/test.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/edit_cache.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/rebuild_cache.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/list_install_components.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/install.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/install/local.dir
+/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/CMakeFiles/install/strip.dir

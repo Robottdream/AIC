@@ -1,0 +1,1 @@
+ament_cmake_symlink_install_targets("TARGET_FILES" "/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin/libsimple_move_plugin.so" "TARGETS" "simple_move_plugin" "LIBRARY_DESTINATION" "lib")

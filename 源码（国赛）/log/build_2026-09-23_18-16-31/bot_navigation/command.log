@@ -1,0 +1,3 @@
+Invoking command in '/home/root123/桌面/AIC/源码（国赛）/build/bot_navigation': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/root123/桌面/AIC/源码（国赛）/src/yzbot/bot_navigation -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/root123/桌面/AIC/源码（国赛）/install/bot_navigation
+Invoked command in '/home/root123/桌面/AIC/源码（国赛）/build/bot_navigation' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/root123/桌面/AIC/源码（国赛）/src/yzbot/bot_navigation -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/root123/桌面/AIC/源码（国赛）/install/bot_navigation
+Invoking command in '/home/root123/桌面/AIC/源码（国赛）/build/bot_navigation': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/root123/桌面/AIC/源码（国赛）/build/bot_navigation -- -j24 -l24

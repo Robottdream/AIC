@@ -1,0 +1,36 @@
+[0.417s] Invoking command in '/home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description': PYTHONPATH=/home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/build --no-deps symlink_data
+[0.577s] running develop
+[0.681s] running egg_info
+[0.681s] creating mybot_description.egg-info
+[0.681s] writing mybot_description.egg-info/PKG-INFO
+[0.681s] writing dependency_links to mybot_description.egg-info/dependency_links.txt
+[0.681s] writing entry points to mybot_description.egg-info/entry_points.txt
+[0.681s] writing requirements to mybot_description.egg-info/requires.txt
+[0.681s] writing top-level names to mybot_description.egg-info/top_level.txt
+[0.681s] writing manifest file 'mybot_description.egg-info/SOURCES.txt'
+[0.682s] reading manifest file 'mybot_description.egg-info/SOURCES.txt'
+[0.683s] writing manifest file 'mybot_description.egg-info/SOURCES.txt'
+[0.683s] running build_ext
+[0.684s] Creating /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/lib/python3.10/site-packages/mybot-description.egg-link (link to .)
+[0.684s] 
+[0.684s] Installed /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description
+[0.684s] running symlink_data
+[0.685s] creating /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/ament_index
+[0.685s] creating /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/ament_index/resource_index
+[0.685s] creating /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/ament_index/resource_index/packages
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/resource/mybot_description -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/ament_index/resource_index/packages
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/package.xml -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description
+[0.685s] creating /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/lidar_gazebo.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/originbot_with_arm_gazebo.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/arm.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/rgbd_gazebo.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/originbot_with_rgbd_gazebo_arm.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/camera_gazebo.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/imu_gazebo.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/urdf/large_base.xacro -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/urdf
+[0.685s] creating /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/worlds
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/worlds/room.world -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/worlds
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/worlds/cloister.world -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/worlds
+[0.685s] symbolically linking /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/worlds/box.world -> /home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/share/mybot_description/worlds
+[0.700s] Invoked command in '/home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description' returned '0': PYTHONPATH=/home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/root123/桌面/AIC/源码（国赛）/install_run/mybot_description/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/root123/桌面/AIC/源码（国赛）/build_run/mybot_description/build --no-deps symlink_data
