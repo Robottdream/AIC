@@ -95,8 +95,8 @@ class ArmGrabPlaceNode(Node):
         point_start.time_from_start.nanosec = 500
         point_target = JointTrajectoryPoint()
         point_target.positions = target_joint_positions
-        point_target.time_from_start.sec = 1  # 延长动作时间，确保完成
-        point_target.time_from_start.nanosec = 0
+        point_target.time_from_start.sec = 0
+        point_target.time_from_start.nanosec = 600_000_000
         trajectory.points = [point_start, point_target]
         goal_msg.trajectory = trajectory
         self.current_joint_pos = target_joint_positions
@@ -125,7 +125,7 @@ class ArmGrabPlaceNode(Node):
             result = future.result().result
             if result.error_code == 0:
                 self.get_logger().info("机械臂动作执行完成！")
-                time.sleep(0.5)  # 动作稳定延迟
+                time.sleep(0.05)  # 动作稳定延迟
                 step_done_callback()
             else:
                 self.get_logger().error(f"机械臂动作失败，错误码：{result.error_code}")
@@ -138,16 +138,16 @@ class ArmGrabPlaceNode(Node):
         goal_msg = FollowJointTrajectory.Goal()
         trajectory = JointTrajectory()
         trajectory.joint_names = self.gripper_joint
-        # 优化后的时间序列（将抓取时间从4秒减少到2秒）
-        time_steps = [0, 1, 2] if action_type == "close" else [0, 1, 2, 3]
+        # 夹爪只负责展示开合，抓取由吸附服务确认。
+        time_steps = [0.0, 0.2, 0.4] if action_type == "close" else [0.0, 0.13, 0.27, 0.4]
 
         target_positions = self.gripper_trajectory[action_type]
         points = []
         for i, pos in enumerate(target_positions):
             point = JointTrajectoryPoint()
             point.positions = [pos]
-            point.time_from_start.sec = time_steps[i]
-            point.time_from_start.nanosec = 200
+            point.time_from_start.sec = int(time_steps[i])
+            point.time_from_start.nanosec = int((time_steps[i] % 1.0) * 1_000_000_000) + 200
             points.append(point)
         trajectory.points = points
         goal_msg.trajectory = trajectory
@@ -200,10 +200,11 @@ class ArmGrabPlaceNode(Node):
 
     def _attach_done_cb(self, future, step_done_callback):
         try:
-            # 修复：AttachLink服务无success字段，调用成功即视为吸附成功
-            future.result()  # 仅判断是否调用成功，不访问success
+            response = future.result()
+            if not response.success:
+                raise RuntimeError(response.message)
             self.get_logger().info(f"物块{self.attach_params['model2_name']}吸附成功！")
-            time.sleep(0.5)
+            time.sleep(0.05)
             step_done_callback()
         except Exception as e:
             self.get_logger().error(f"吸附动作失败：{str(e)}")
@@ -223,10 +224,11 @@ class ArmGrabPlaceNode(Node):
 
     def _detach_done_cb(self, future, step_done_callback):
         try:
-            # 修复：DetachLink服务无success字段，调用成功即视为分离成功
-            future.result()  # 仅判断是否调用成功，不访问success
+            response = future.result()
+            if not response.success:
+                raise RuntimeError(response.message)
             self.get_logger().info(f"物块{self.attach_params['model2_name']}分离成功！")
-            time.sleep(0.5)
+            time.sleep(0.05)
             step_done_callback()
         except Exception as e:
             self.get_logger().error(f"分离动作失败：{str(e)}")
@@ -249,10 +251,10 @@ class ArmGrabPlaceNode(Node):
             self.get_logger().info("步骤4：机械臂举高（回到初始位置）...")
             self.current_step = 4
             self.send_arm_action(self.arm_trajectory["lift"], self._after_arm_lift)
+            # The cube is attached. Start driving while the arm retracts.
+            self.arm_status_pub.publish(String(data="grasp_succeeded"))
         elif self.current_step == 4:
             self.get_logger().info(f"抓取流程全部完成！已吸附物块：{self.attach_params['model2_name']}")
-            # 关键修复：发布抓取成功信号给主控
-            self.arm_status_pub.publish(String(data="grasp_succeeded"))
             self.current_step = 5
             self.is_executing = False
 
@@ -281,10 +283,10 @@ class ArmGrabPlaceNode(Node):
             self.get_logger().info("步骤4：机械臂举高（回到初始位置）...")
             self.current_step = 4
             self.send_arm_action(self.arm_trajectory["lift"], self._after_arm_lift_place)
+            # The cube is detached and stationary. Start the next route now.
+            self.arm_status_pub.publish(String(data="place_succeeded"))
         elif self.current_step == 4:
             self.get_logger().info(f"放置流程全部完成！已分离物块：{self.attach_params['model2_name']}")
-            # 关键修复：发布放置成功信号给主控
-            self.arm_status_pub.publish(String(data="place_succeeded"))
             self.current_step = 5
             self.is_executing = False
 

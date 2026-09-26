@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Bool
@@ -11,6 +12,7 @@ import json
 class SimpleNav2Navigator(Node):
     def __init__(self):
         super().__init__("simple_nav2_navigator")
+        self.set_parameters([Parameter("use_sim_time", value=True)])
         
         # 初始化Nav2动作客户端
         self.nav_client = ActionClient(self, NavigateToPose, "/navigate_to_pose")
@@ -38,8 +40,8 @@ class SimpleNav2Navigator(Node):
         
         # 预设区域坐标
         self.area_coords = {
-            "A": {"x": 3.143086, "y": -5.807858, "yaw": 0.0},
-            "B": {"x": -1.196544, "y": -6.485499, "yaw": 0.0},
+            "A": {"x": 2.593086, "y": -5.807858, "yaw": 0.0},
+            "B": {"x": -1.746544, "y": -6.485499, "yaw": 0.0},
             "C": {"x": -6.873777, "y": -7.785160, "yaw": 0.0}
         }
         

@@ -75,7 +75,7 @@
         <constraints>
           <cfm>0.000000</cfm>
           <erp>0.200000</erp>
-          <contact_max_correcting_vel>100.000000</contact_max_correcting_vel>
+          <contact_max_correcting_vel>10.000000</contact_max_correcting_vel>
           <contact_surface_layer>0.000000</contact_surface_layer>
         </constraints>
       </ode>
@@ -3683,7 +3683,11 @@
       <pose>7.632928 5.523903 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
@@ -3695,7 +3699,11 @@
       <pose>9.604514 -3.707741 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
@@ -3707,7 +3715,11 @@
       <pose>-5.735783 5.507306 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
@@ -3719,7 +3731,11 @@
       <pose>-8.702837 1.000008 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
@@ -3731,7 +3747,11 @@
       <pose>-10.748330 4.014158 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
@@ -3743,7 +3763,11 @@
       <pose>8.464876 -7.097603 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
@@ -3755,7 +3779,11 @@
       <pose>5.040937 -7.441163 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
@@ -3767,7 +3795,11 @@
       <pose>-1.478995 6.646223 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
@@ -3779,7 +3811,11 @@
       <pose>-9.664453 -3.267239 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
@@ -3791,7 +3827,11 @@
       <pose>-3.703343 0.829596 0.75 0 0 0</pose>
       <link name='link'>
         <inertial><mass>0.1</mass></inertial>
-        <collision name='collision'><geometry><box><size>0.03 0.03 0.03</size></box></geometry></collision>
+        <gravity>0</gravity>
+        <collision name='collision'>
+          <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
+          <surface><contact><collide_bitmask>0</collide_bitmask></contact></surface>
+        </collision>
         <visual name='visual'>
           <geometry><box><size>0.03 0.03 0.03</size></box></geometry>
           <material><ambient>0 0 1 1</ambient><diffuse>0 0 1 1</diffuse></material>
@@ -3854,8 +3894,8 @@
     <kinematic>0</kinematic>
   </link>
   <plugin name='simple_move_plugin2' filename='libsimple_move_plugin.so'>
-    <speed>0.6</speed>        <!-- 适中的速度 -->
-    <force>15.0</force>       <!-- 适中的力 -->
+    <speed>0.35</speed>       <!-- 限制移动障碍物的碰撞速度 -->
+    <force>10.0</force>       <!-- 比原来15N更低的最大推力 -->
     <start_x>-9.0</start_x>   <!-- 起点X坐标 -->
     <start_y>-4.2</start_y>   <!-- 起点Y坐标 -->
     <end_x>-5.0</end_x>       <!-- 终点X坐标 -->
@@ -3917,8 +3957,8 @@
     <kinematic>0</kinematic>
   </link>
   <plugin name='simple_move_plugin3' filename='libsimple_move_plugin.so'>
-    <speed>0.6</speed>        <!-- 适中的速度 -->
-    <force>15.0</force>       <!-- 适中的力 -->
+    <speed>0.35</speed>       <!-- 限制移动障碍物的碰撞速度 -->
+    <force>10.0</force>       <!-- 比原来15N更低的最大推力 -->
     <start_x>-2.5</start_x>   <!-- 起点X坐标 -->
     <start_y>3.0</start_y>    <!-- 起点Y坐标 -->
     <end_x>-2.5</end_x>       <!-- 终点X坐标 -->

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <algorithm>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 
@@ -24,6 +25,7 @@ namespace gazebo
         double end_x;
         double end_y;
         bool moving_to_end;
+        double last_print_time = 0.0;
         
         std::string log_prefix;
         
@@ -147,29 +149,45 @@ namespace gazebo
                 double dir_x = dx / distance;
                 double dir_y = dy / distance;
                 
-                // 计算当前速度在目标方向上的分量
-                double vel_in_dir = linear_vel.X() * dir_x + linear_vel.Y() * dir_y;
-                
-                // 如果速度小于目标速度，施加力
-                if (vel_in_dir < this->speed)
+                // 用有限推力闭环控制速度，并把被碰撞推离轨道的物块拉回轨道。
+                // 固定推力会在接触墙/车时持续蓄力，造成物理求解器弹飞。
+                double path_dx = this->end_x - this->start_x;
+                double path_dy = this->end_y - this->start_y;
+                double path_len_sq = path_dx * path_dx + path_dy * path_dy;
+                double nearest_x = this->start_x;
+                double nearest_y = this->start_y;
+                if (path_len_sq > 1e-8)
                 {
-                    ignition::math::Vector3d force_vec(dir_x * this->force, 
-                                                     dir_y * this->force, 
-                                                     0.0);
-                    
-                    // 在质心位置施加力
-                    ignition::math::Vector3d center_of_mass = this->link->GetInertial()->Pose().Pos();
-                    this->link->AddForceAtRelativePosition(force_vec, center_of_mass);
+                    double t = ((current_x - this->start_x) * path_dx +
+                                (current_y - this->start_y) * path_dy) / path_len_sq;
+                    t = std::max(0.0, std::min(1.0, t));
+                    nearest_x += t * path_dx;
+                    nearest_y += t * path_dy;
                 }
-                
+                double target_speed = std::min(this->speed, distance);
+                double desired_vx = dir_x * target_speed +
+                    std::max(-0.25, std::min(0.25, (nearest_x - current_x) * 0.8));
+                double desired_vy = dir_y * target_speed +
+                    std::max(-0.25, std::min(0.25, (nearest_y - current_y) * 0.8));
+                double fx = 50.0 * (desired_vx - linear_vel.X());
+                double fy = 50.0 * (desired_vy - linear_vel.Y());
+                double magnitude = std::hypot(fx, fy);
+                if (magnitude > this->force && magnitude > 0.0)
+                {
+                    fx *= this->force / magnitude;
+                    fy *= this->force / magnitude;
+                }
+                ignition::math::Vector3d center_of_mass = this->link->GetInertial()->Pose().Pos();
+                this->link->AddForceAtRelativePosition(
+                    ignition::math::Vector3d(fx, fy, 0.0), center_of_mass);
+
                 // 定期输出状态
-                static double last_print_time = 0;
                 double current_time = _info.simTime.Double();
                 
-                if (current_time - last_print_time >= 1.0)
+                if (current_time - this->last_print_time >= 1.0)
                 {
                     this->PrintStatus(current_time, pose, linear_vel, distance);
-                    last_print_time = current_time;
+                    this->last_print_time = current_time;
                 }
             }
             catch (const std::exception& e)
@@ -216,18 +234,12 @@ namespace gazebo
             std::cout << this->log_prefix 
                       << "Time: " << current_time << "s | "
                       << "Pos: (" << pose.Pos().X() << "," << pose.Pos().Y() << ") | "
-                      << "Vel: " << linear_vel.Length() << "m/s | "
+                      << "Z: " << pose.Pos().Z() << "m | "
+                      << "Vxy: " << std::hypot(linear_vel.X(), linear_vel.Y()) << "m/s | "
+                      << "Vz: " << linear_vel.Z() << "m/s | "
                       << "To" << target_str << ": " << distance << "m" << std::endl;
         }
         
-        ~SimpleMovePlugin()
-        {
-            // 析构函数
-            if (rclcpp::ok())
-            {
-                rclcpp::shutdown();
-            }
-        }
     };
     
     GZ_REGISTER_MODEL_PLUGIN(SimpleMovePlugin)

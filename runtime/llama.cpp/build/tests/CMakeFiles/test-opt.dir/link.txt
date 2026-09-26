@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/test-opt.dir/test-opt.cpp.o -o ../bin/test-opt  -Wl,-rpath,/home/root123/桌面/AIC/runtime/llama.cpp/build/bin: ../bin/libllama-common.so.0.4.1 ../common/libllama-common-base.a ../bin/libllama.so.0.4.1 ../bin/libggml.so.0.24.0 ../bin/libggml-cpu.so.0.24.0 ../bin/libggml-base.so.0.24.0 

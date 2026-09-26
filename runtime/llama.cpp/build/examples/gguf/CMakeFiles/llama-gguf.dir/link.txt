@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/llama-gguf.dir/gguf.cpp.o -o ../../bin/llama-gguf  -Wl,-rpath,/home/root123/桌面/AIC/runtime/llama.cpp/build/bin: ../../bin/libggml.so.0.24.0 ../../bin/libggml-cpu.so.0.24.0 ../../bin/libggml-base.so.0.24.0 

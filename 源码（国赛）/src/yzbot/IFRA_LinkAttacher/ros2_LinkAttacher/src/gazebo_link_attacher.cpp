@@ -38,6 +38,7 @@
 
 #include <gazebo_ros/node.hpp>
 #include <memory>
+#include <cmath>
 
 #include "gazebo_ros/conversions/builtin_interfaces.hpp"
 #include "gazebo_ros/conversions/geometry_msgs.hpp"
@@ -227,6 +228,20 @@ void GazeboLinkAttacherPrivate::Detach(
     // gazebo breaks when attaching it again, since the joint already existed. Joint must be REMOVED when detaching.
     gazebo::physics::ModelPtr model1 = world_->ModelByName(_req->model1_name);
     model1->RemoveJoint(JointName);
+
+    // A fixed-joint simulation can occasionally put a tiny cube far from the
+    // gripper. Correct an implausible release pose before freezing the cube.
+    const auto gripper_pose = j.l1->WorldPose();
+    const auto cube_pose = j.m2->WorldPose();
+    if ((cube_pose.Pos() - gripper_pose.Pos()).Length() > 0.75 ||
+        std::abs(cube_pose.Pos().Z() - 0.75) > 0.3) {
+      j.m2->SetWorldPose(ignition::math::Pose3d(
+        ignition::math::Vector3d(gripper_pose.Pos().X(), gripper_pose.Pos().Y(), 0.75),
+        ignition::math::Quaterniond::Identity));
+    }
+    j.l2->SetLinearVel(ignition::math::Vector3d::Zero);
+    j.l2->SetAngularVel(ignition::math::Vector3d::Zero);
+    j.l2->SetKinematic(true);
 
     IsAttached = false;
     

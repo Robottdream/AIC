@@ -1,1 +1,0 @@
-Invoking command in '/home/root123/桌面/AIC/源码（国赛）/build/gazebo_physics_obstacle_plugin': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/root123/桌面/AIC/源码（国赛）/src/gazebo_physics_obstacle_plugin -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/root123/桌面/AIC/源码（国赛）/install/gazebo_physics_obstacle_plugin

@@ -1,18 +1,22 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.parameter import Parameter
+from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Int32
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from nav2_msgs.action import ComputePathToPose
 from rclpy.timer import Timer
 import json
 import math
 import weakref
-import gc
 from itertools import permutations
 
 class MainControllerNode(Node):
     def __init__(self):
         super().__init__("main_controller_node")
+        self.set_parameters([Parameter("use_sim_time", value=True)])
         
         # QoS配置
         self.qos_best_effort = QoSProfile(
@@ -37,13 +41,18 @@ class MainControllerNode(Node):
             (-3.703343, 0.829596, False)
         ]
         self.AREA_COORDS = {
-            "A": (3.143086, -5.807858),
-            "B": (-1.196544, -6.485499),
+            "A": (2.593086, -5.727858),
+            "B": (-1.746544, -6.485499),
             "C": (-6.873777, -7.785160)
         }
         
         # 核心变量
         self.current_robot_pose = (0.0, 0.0)
+        self.plan_client = ActionClient(self, ComputePathToPose, "/compute_path_to_pose")
+        self.selection_id = 0
+        self.failed_blocks_for_step = set()
+        self.selection_candidates = []
+        self.selection_best = None
         self.target_blocks = []
         self.GRASP_OFFSET = 0.55
         self.OFFSET_AXIS = "x"
@@ -134,6 +143,136 @@ class MainControllerNode(Node):
                 available.append((x, y, i))
         return available
     
+    def _pose_stamped(self, x, y, yaw=0.0):
+        pose = PoseStamped()
+        pose.header.frame_id = "map"
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.pose.position.x = float(x)
+        pose.pose.position.y = float(y)
+        pose.pose.orientation.z = math.sin(yaw / 2.0)
+        pose.pose.orientation.w = math.cos(yaw / 2.0)
+        return pose
+
+    @staticmethod
+    def _path_length(path):
+        points = path.poses
+        return sum(
+            math.hypot(
+                b.pose.position.x - a.pose.position.x,
+                b.pose.position.y - a.pose.position.y,
+            ) for a, b in zip(points, points[1:])
+        )
+
+    def _select_reachable_block(self):
+        """每件货物从当前定位出发，按 Nav2 实际往返路径重新选块。"""
+        if not self.current_assignment:
+            return
+        self.selection_id += 1
+        selection_id = self.selection_id
+        self.current_step = "SELECT_BLOCK"
+        self._update_foxglove()
+        color = self.current_task["color"]
+        self.selection_candidates = [
+            (block, index, candidate)
+            for block in self.get_available_blocks(color)
+            if block[2] not in self.failed_blocks_for_step
+            for index, candidate in enumerate(self.get_grasp_candidates(block[:2]))
+        ]
+        self.selection_candidates.sort(
+            key=lambda item: self.calculate_distance(self.current_robot_pose, item[2])
+        )
+        self.selection_best = None
+        if not self.selection_candidates:
+            self._stop_failed_task(f"没有可选的{color}物块")
+            return
+        if not self.plan_client.wait_for_server(timeout_sec=2.0):
+            self._stop_failed_task("Nav2路径规划服务不可用")
+            return
+        self.get_logger().info(
+            f"按当前代价地图检查{len(self.selection_candidates)}个抓取位置及返回目标区域的路径"
+        )
+        self._plan_next_candidate(selection_id)
+
+    def _plan_next_candidate(self, selection_id):
+        if selection_id != self.selection_id or self.current_step != "SELECT_BLOCK":
+            return
+        if not self.selection_candidates:
+            if self.selection_best is None:
+                self._stop_failed_task("当前没有可达且可返回目标区域的同色物块")
+                return
+            _, block, candidate_index = self.selection_best
+            x, y, block_idx = block
+            self.current_assignment.update(
+                block_pos=(x, y), block_idx=block_idx,
+                grasp_pos=self.get_grasp_candidates((x, y))[candidate_index][:2],
+            )
+            self.selected_block = (x, y, f"{self.current_task['color']}_cube_{block_idx + 1}", block_idx)
+            self.current_grasp_candidate_index = candidate_index
+            self.attempted_candidate_indices = set()
+            self.get_logger().info(f"选定可达物块：{self.selected_block[2]}，接近方向{candidate_index + 1}")
+            self.navigate_to_block()
+            return
+        block, candidate_index, candidate = self.selection_candidates.pop(0)
+        self._active_candidate = (block, candidate_index, candidate)
+        request = ComputePathToPose.Goal()
+        request.goal = self._pose_stamped(*candidate)
+        request.use_start = False
+        future = self.plan_client.send_goal_async(request)
+        future.add_done_callback(
+            lambda result: self._plan_response(result, selection_id, False)
+        )
+
+    def _plan_response(self, future, selection_id, returning):
+        if selection_id != self.selection_id or self.current_step != "SELECT_BLOCK":
+            return
+        try:
+            handle = future.result()
+            if not handle.accepted:
+                self._plan_next_candidate(selection_id)
+                return
+            result_future = handle.get_result_async()
+            result_future.add_done_callback(
+                lambda result: self._plan_result(result, selection_id, returning)
+            )
+        except Exception as exc:
+            self.get_logger().warn(f"检查候选路径失败：{exc}")
+            self._plan_next_candidate(selection_id)
+
+    def _plan_result(self, future, selection_id, returning):
+        if selection_id != self.selection_id or self.current_step != "SELECT_BLOCK":
+            return
+        try:
+            response = future.result()
+            if response.status != GoalStatus.STATUS_SUCCEEDED or not response.result.path.poses:
+                self._plan_next_candidate(selection_id)
+                return
+            length = self._path_length(response.result.path)
+            block, candidate_index, candidate = self._active_candidate
+            if not returning:
+                self._outbound_length = length
+                request = ComputePathToPose.Goal()
+                request.start = self._pose_stamped(*candidate)
+                area = self.current_assignment["area_pos"]
+                request.goal = self._pose_stamped(*area)
+                request.use_start = True
+                future = self.plan_client.send_goal_async(request)
+                future.add_done_callback(
+                    lambda result: self._plan_response(result, selection_id, True)
+                )
+                return
+            total_length = self._outbound_length + length
+            # The second approach to blue_cube_5 has completed reliably and
+            # avoids a slow wall-side detour seen with the third approach.
+            ranking_cost = total_length
+            if self.current_task["color"] == "blue" and block[2] == 4 and candidate_index != 1:
+                ranking_cost += 20.0
+            if self.selection_best is None or ranking_cost < self.selection_best[0]:
+                self.selection_best = (ranking_cost, block, candidate_index)
+            self._plan_next_candidate(selection_id)
+        except Exception as exc:
+            self.get_logger().warn(f"读取候选路径失败：{exc}")
+            self._plan_next_candidate(selection_id)
+
     # 为单个任务分配最佳物块（考虑已使用的物块）
     def assign_best_block_to_task(self, task, used_blocks=None, current_pos=None):
         if used_blocks is None:
@@ -205,17 +344,23 @@ class MainControllerNode(Node):
     
     # 优化多任务执行顺序
     def optimize_task_order(self, tasks):
-        # 比赛按出题顺序计分，只选择每步的货物，不重排任务。
-        total_cost, assignments = self.calculate_task_sequence_cost(tasks)
-        if assignments:
-            self.get_logger().info(f"按出题顺序规划完成，预计路径总距离：{total_cost:.2f}米")
-            for i, assignment in enumerate(assignments, 1):
-                task = assignment["task"]
-                block_pos = assignment["block_pos"]
-                self.get_logger().info(
-                    f"{i}. {task['num']}个{task['color']}物块到{task['to']}区 "
-                    f"(物块位置: {block_pos[0]:.2f},{block_pos[1]:.2f})"
-                )
+        """保留出题顺序；具体物块在每一步开始时按实时路径确定。"""
+        counts = {"red": 0, "blue": 0}
+        for task in tasks:
+            color = task["color"]
+            if color not in counts or task["to"] not in self.AREA_COORDS:
+                self.get_logger().error(f"不支持的任务：{task}")
+                return []
+            counts[color] += 1
+        for color, count in counts.items():
+            if count > len(self.get_available_blocks(color)):
+                self.get_logger().error(f"{color}物块数量不足：需要{count}个")
+                return []
+        assignments = [
+            {"task": task, "area_pos": self.AREA_COORDS[task["to"]]}
+            for task in tasks
+        ]
+        self.get_logger().info(f"按出题顺序生成{len(assignments)}个步骤，每步开始时重新规划可达物块")
         return assignments
 
     # 为同一任务的多个物块生成优化顺序
@@ -463,18 +608,14 @@ class MainControllerNode(Node):
         self.completed_num = 0
         self.current_step = "NAV_TO_BLOCK"
         
-        # 初始化目标物块信息
-        self.selected_block = (
-            self.current_assignment["block_pos"][0],
-            self.current_assignment["block_pos"][1],
-            f"{self.current_task['color']}_cube_{self.current_assignment['block_idx'] + 1}",
-            self.current_assignment["block_idx"]
-        )
+        self.selected_block = None
         # 重置状态变量
         self.grasp_confirmed = False
         self.place_confirmed = False
         self.current_grasp_retry = 0
         self.current_grasp_candidate_index = 0
+        self.attempted_candidate_indices = set()
+        self.failed_blocks_for_step = set()
         self.current_area_nav_retry = 0
         self.closest_cache = None
         self._clean_timers()
@@ -485,9 +626,6 @@ class MainControllerNode(Node):
         
         self.get_logger().info(
             f"开始执行优化任务：{current_index}/{original_num} 个{color}物块 → {self.current_task['to']}区"
-        )
-        self.get_logger().info(
-            f"目标物块位置：({self.current_assignment['block_pos'][0]:.2f}, {self.current_assignment['block_pos'][1]:.2f})"
         )
         
         # 根据area_pos确定目标区域编号
@@ -510,7 +648,7 @@ class MainControllerNode(Node):
         
         # 立即更新状态，确保颜色在任务开始时就显示
         self._update_foxglove()
-        self.navigate_to_block()
+        self._select_reachable_block()
     
     # 导航状态回调
     @staticmethod
@@ -530,15 +668,22 @@ class MainControllerNode(Node):
                 self.trigger_place()
         elif status.startswith("failed:"):
             if self.current_step == "NAV_TO_BLOCK":
-                self.current_grasp_candidate_index += 1
+                self.attempted_candidate_indices.add(self.current_grasp_candidate_index)
                 candidates = self.get_grasp_candidates(self.current_assignment["block_pos"])
-                if self.current_grasp_candidate_index < len(candidates):
+                remaining = [i for i in range(len(candidates)) if i not in self.attempted_candidate_indices]
+                if remaining:
+                    self.current_grasp_candidate_index = remaining[0]
                     self.get_logger().warn(
-                        f"抓取点不可达（{status}），尝试第{self.current_grasp_candidate_index + 1}个接近方向"
+                        f"抓取点不可达（{status}），尝试第{remaining[0] + 1}个接近方向"
                     )
                     self.navigate_to_block()
                 else:
-                    self._stop_failed_task(f"物块四个接近方向均不可达：{status}")
+                    failed_idx = self.current_assignment["block_idx"]
+                    self.failed_blocks_for_step.add(failed_idx)
+                    self.get_logger().warn(
+                        f"物块{self.selected_block[2]}的四个接近方向均不可达，重新选择同色物块"
+                    )
+                    self._select_reachable_block()
             elif self.current_step == "NAV_TO_AREA":
                 self.current_area_nav_retry += 1
                 if self.current_area_nav_retry <= 1:
@@ -552,6 +697,7 @@ class MainControllerNode(Node):
     def _stop_failed_task(self, reason):
         """保留未完成货物状态，停止后续任务，等待人工重新下达命令。"""
         self.get_logger().error(reason)
+        self.selection_id += 1
         self._clean_timers()
         self.current_task = None
         self.current_assignment = None
@@ -574,14 +720,20 @@ class MainControllerNode(Node):
         if not self:
             return
         status = msg.data.strip()
-        if status == "grasp_succeeded":
+        if status == "grasp_succeeded" and self.current_step == "GRASP":
             self.grasp_confirmed = True
-            self.get_logger().info("机械臂抓取成功")
-        elif status == "place_succeeded":
+            self.get_logger().info("机械臂抓取成功，立即前往目标区域")
+            self._check_grasp(self_ref)
+        elif status == "place_succeeded" and self.current_step == "PLACE":
             self.place_confirmed = True
-            self.get_logger().info("机械臂放置成功")
-        elif status in ["grasp_failed", "place_failed"]:
-            self.get_logger().warn(f"机械臂{status}")
+            self.get_logger().info("机械臂放置成功，立即执行下一件")
+            self._check_place(self_ref)
+        elif status == "grasp_failed" and self.current_step == "GRASP":
+            self.get_logger().warn("机械臂抓取失败，立即重试")
+            self._check_grasp(self_ref)
+        elif status == "place_failed" and self.current_step == "PLACE":
+            self.get_logger().warn("机械臂放置失败，立即重试")
+            self._check_place(self_ref)
     
     def _arm_status_callback(self, msg):
         self_ref = weakref.ref(self)
@@ -613,14 +765,15 @@ class MainControllerNode(Node):
     # 触发抓取
     def trigger_grasp(self):
         if self.current_grasp_retry >= self.max_grasp_retry:
-            self.get_logger().error(f"抓取重试达{self.max_grasp_retry}次，跳过该物块")
+            self.get_logger().error(f"抓取重试达{self.max_grasp_retry}次，换同色物块")
+            self.failed_blocks_for_step.add(self.current_assignment["block_idx"])
             self.current_grasp_retry = 0
-            self._process_next_optimized_task()
+            self._select_reachable_block()
             return
         self.get_logger().info(f"触发抓取（重试次数：{self.current_grasp_retry}/{self.max_grasp_retry}）")
-        self.arm_cargo_pub.publish(String(data="arrived_at_cargo"))
         self_ref = weakref.ref(self)
         self.grasp_timer = self.create_timer(self.GRASP_TIMEOUT, lambda: self._check_grasp(self_ref))
+        self.arm_cargo_pub.publish(String(data="arrived_at_cargo"))
     
     # 检查抓取结果
     @staticmethod
@@ -648,7 +801,6 @@ class MainControllerNode(Node):
             self.current_grasp_retry += 1
             self.get_logger().warn(f"抓取超时/失败，准备重试（{self.current_grasp_retry}/{self.max_grasp_retry}）")
             self.trigger_grasp()
-        gc.collect()
     
     # 导航到目标区域
     def navigate_to_area(self):
@@ -670,13 +822,13 @@ class MainControllerNode(Node):
     def trigger_place(self):
         self.get_logger().info("触发放置")
         self.place_confirmed = False
+        self_ref = weakref.ref(self)
+        self.place_timer = self.create_timer(self.PLACE_TIMEOUT, lambda: self._check_place(self_ref))
         self.arm_area_pub.publish(String(data="arrived_at_area"))
         
         # 发布状态4：正在放置
         self.foxglove_pubs["cur"].publish(Int32(data=4))
         
-        self_ref = weakref.ref(self)
-        self.place_timer = self.create_timer(self.PLACE_TIMEOUT, lambda: self._check_place(self_ref))
     
     # 检查放置结果
     @staticmethod
@@ -703,7 +855,6 @@ class MainControllerNode(Node):
             self.get_logger().warn("放置超时/失败，准备重试")
             self.trigger_place()
         
-        gc.collect()
     
     # 清理定时器
     def _clean_timers(self):
@@ -726,6 +877,7 @@ class MainControllerNode(Node):
         # 根据当前步骤设置状态值
         step_to_status = {
             "WAIT_TASK": 0,      # 等待任务
+            "SELECT_BLOCK": 1,   # 检查可达物块
             "NAV_TO_BLOCK": 1,   # 导航到物块
             "GRASP": 2,          # 抓取中
             "NAV_TO_AREA": 3,    # 导航到区域
@@ -745,7 +897,7 @@ class MainControllerNode(Node):
             self.foxglove_pubs["ask"].publish(Int32(data=color_code))  # ask与color完全相同
             
             # 根据当前步骤设置pick状态
-            if self.current_step in ["WAIT_TASK", "NAV_TO_BLOCK"]:
+            if self.current_step in ["WAIT_TASK", "SELECT_BLOCK", "NAV_TO_BLOCK"]:
                 pick_code = -1
             elif self.current_step in ["GRASP", "NAV_TO_AREA"]:
                 pick_code = 0
