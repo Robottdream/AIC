@@ -53,6 +53,7 @@ class MainControllerNode(Node):
         self.failed_blocks_for_step = set()
         self.selection_candidates = []
         self.selection_best = None
+        self.selection_options = []
         self.target_blocks = []
         self.GRASP_OFFSET = 0.55
         self.OFFSET_AXIS = "x"
@@ -182,6 +183,7 @@ class MainControllerNode(Node):
             key=lambda item: self.calculate_distance(self.current_robot_pose, item[2])
         )
         self.selection_best = None
+        self.selection_options = []
         if not self.selection_candidates:
             self._stop_failed_task(f"没有可选的{color}物块")
             return
@@ -193,6 +195,60 @@ class MainControllerNode(Node):
         )
         self._plan_next_candidate(selection_id)
 
+    @staticmethod
+    def _approach_penalty(color, block_index, candidate_index):
+        # These approaches completed the full mission without a progress
+        # recovery. Keep alternatives available if the preferred path closes.
+        preferred = {("red", 2): 2, ("blue", 4): 1}
+        direction = preferred.get((color, block_index))
+        return 20.0 if direction is not None and candidate_index != direction else 0.0
+
+    def _remaining_same_area_tasks(self):
+        """Only consecutive deliveries to this area can reuse its return paths."""
+        remaining = 0
+        for assignment in self.optimized_tasks:
+            task = assignment["task"]
+            if (task["color"] != self.current_task["color"]
+                    or task["to"] != self.current_task["to"]):
+                break
+            remaining += 1
+        return remaining
+
+    def _choose_route_with_lookahead(self):
+        """Reserve cheap area round trips for later deliveries.
+
+        NavFn paths are bidirectional on this static map, so the planned
+        candidate-to-area length also estimates the next area-to-candidate leg.
+        Actual reachability is checked again before every later pickup.
+        """
+        remaining = self._remaining_same_area_tasks()
+        if remaining == 0:
+            return self.selection_best
+
+        future_cost_by_block = {}
+        for current_cost, return_length, block, candidate_index in self.selection_options:
+            future_cost = 2.0 * return_length + self._approach_penalty(
+                self.current_task["color"], block[2], candidate_index
+            )
+            block_index = block[2]
+            future_cost_by_block[block_index] = min(
+                future_cost, future_cost_by_block.get(block_index, float("inf"))
+            )
+
+        best = None
+        for current_cost, _, block, candidate_index in self.selection_options:
+            future = sorted(
+                cost for index, cost in future_cost_by_block.items()
+                if index != block[2]
+            )
+            if len(future) < remaining:
+                continue
+            score = current_cost + sum(future[:remaining])
+            key = (score, current_cost, block[2], candidate_index)
+            if best is None or key < best[0]:
+                best = (key, (current_cost, block, candidate_index))
+        return best[1] if best else self.selection_best
+
     def _plan_next_candidate(self, selection_id):
         if selection_id != self.selection_id or self.current_step != "SELECT_BLOCK":
             return
@@ -200,7 +256,14 @@ class MainControllerNode(Node):
             if self.selection_best is None:
                 self._stop_failed_task("当前没有可达且可返回目标区域的同色物块")
                 return
+            greedy_best = self.selection_best
+            self.selection_best = self._choose_route_with_lookahead()
             _, block, candidate_index = self.selection_best
+            if (block[2], candidate_index) != (greedy_best[1][2], greedy_best[2]):
+                self.get_logger().info(
+                    f"连续任务前瞻改选：{self.current_task['color']}_cube_{block[2] + 1}"
+                    f"方向{candidate_index + 1}"
+                )
             x, y, block_idx = block
             self.current_assignment.update(
                 block_pos=(x, y), block_idx=block_idx,
@@ -261,11 +324,12 @@ class MainControllerNode(Node):
                 )
                 return
             total_length = self._outbound_length + length
-            # The second approach to blue_cube_5 has completed reliably and
-            # avoids a slow wall-side detour seen with the third approach.
-            ranking_cost = total_length
-            if self.current_task["color"] == "blue" and block[2] == 4 and candidate_index != 1:
-                ranking_cost += 20.0
+            ranking_cost = total_length + self._approach_penalty(
+                self.current_task["color"], block[2], candidate_index
+            )
+            self.selection_options.append(
+                (ranking_cost, length, block, candidate_index)
+            )
             if self.selection_best is None or ranking_cost < self.selection_best[0]:
                 self.selection_best = (ranking_cost, block, candidate_index)
             self._plan_next_candidate(selection_id)
@@ -617,6 +681,8 @@ class MainControllerNode(Node):
         self.attempted_candidate_indices = set()
         self.failed_blocks_for_step = set()
         self.current_area_nav_retry = 0
+        self.area_nav_targets = []
+        self.area_nav_target_index = 0
         self.closest_cache = None
         self._clean_timers()
         
@@ -663,9 +729,14 @@ class MainControllerNode(Node):
                 self.current_step = "GRASP"
                 self.trigger_grasp()
             elif self.current_step == "NAV_TO_AREA":
-                self.get_logger().info("到达目标区域，准备放置")
-                self.current_step = "PLACE"
-                self.trigger_place()
+                if self.area_nav_target_index + 1 < len(self.area_nav_targets):
+                    self.area_nav_target_index += 1
+                    self.current_area_nav_retry = 0
+                    self._send_current_area_target()
+                else:
+                    self.get_logger().info("到达目标区域，准备放置")
+                    self.current_step = "PLACE"
+                    self.trigger_place()
         elif status.startswith("failed:"):
             if self.current_step == "NAV_TO_BLOCK":
                 self.attempted_candidate_indices.add(self.current_grasp_candidate_index)
@@ -688,7 +759,7 @@ class MainControllerNode(Node):
                 self.current_area_nav_retry += 1
                 if self.current_area_nav_retry <= 1:
                     self.get_logger().warn(f"区域导航失败（{status}），重试一次")
-                    self.navigate_to_area()
+                    self._send_current_area_target()
                 else:
                     self._stop_failed_task(f"目标区域导航失败：{status}")
         elif status in ("emergency_stop", "paused"):
@@ -809,15 +880,33 @@ class MainControllerNode(Node):
             return
         self.place_confirmed = False
         area_pos = self.current_assignment["area_pos"]
-        area = self.current_task["to"]
-        
+        self.area_nav_targets = [(area_pos[0], area_pos[1], 0.0)]
+        # The B approach from blue_cube_5 crosses a narrow doorway. First
+        # align with its open center before entering; the two planned legs
+        # are approximately the same length as the direct path.
+        if (self.current_task["to"] == "B" and self.selected_block
+                and self.selected_block[2] == "blue_cube_5"):
+            self.area_nav_targets.insert(0, (-1.8, -2.4, -math.pi / 2))
+        self.area_nav_target_index = 0
+        self.current_area_nav_retry = 0
+        self._send_current_area_target()
+
+    def _send_current_area_target(self):
+        if not self.current_assignment or not self.area_nav_targets:
+            return
+        x, y, yaw = self.area_nav_targets[self.area_nav_target_index]
         nav_msg = String()
-        nav_msg.data = json.dumps({"type": "custom", "x": area_pos[0], "y": area_pos[1], "yaw": 0.0})
+        nav_msg.data = json.dumps({"type": "custom", "x": x, "y": y, "yaw": yaw})
         self.nav_target_pub.publish(nav_msg)
         self.current_step = "NAV_TO_AREA"
         self._update_foxglove()
-        self.get_logger().info(f"导航到目标区域 {area}：({area_pos[0]:.2f}, {area_pos[1]:.2f})")
-    
+        if self.area_nav_target_index + 1 < len(self.area_nav_targets):
+            self.get_logger().info(f"导航至门前引导点：({x:.2f}, {y:.2f})")
+        else:
+            self.get_logger().info(
+                f"导航到目标区域 {self.current_task['to']}：({x:.2f}, {y:.2f})"
+            )
+
     # 触发放置
     def trigger_place(self):
         self.get_logger().info("触发放置")
