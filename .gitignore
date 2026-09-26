@@ -1,0 +1,32 @@
+# ROS 2 / colcon build outputs
+**/build/
+**/build_run/
+**/install/
+**/install_run/
+**/log/
+**/log_run/
+
+# Local runs and downloaded runtime
+运行日志/
+runtime/
+.nested_git_backup/
+
+# Python and editor artifacts
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.vscode/
+.idea/
+
+# Generated binaries, source archives, and local backups
+*.so
+*.o
+*.a
+*.zip
+*.before-*
+
+# Reference documents and local task data outside the source tree
+/*.pdf
+/*.docx
+/*.txt
+/demo1.json
