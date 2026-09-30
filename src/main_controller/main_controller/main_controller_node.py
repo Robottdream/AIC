@@ -7,10 +7,12 @@ from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Int32
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_msgs.action import ComputePathToPose
+from nav_msgs.msg import Odometry
 from rclpy.timer import Timer
 import json
 import math
 import weakref
+import os
 from itertools import permutations
 
 class MainControllerNode(Node):
@@ -21,7 +23,10 @@ class MainControllerNode(Node):
     BLOCK_INGRESS = {("red_cube_3", 2): (-6.5, 1.8, math.pi / 2)}
     AREA_INGRESS = {
         ("blue_cube_5", "B"): (-1.8, -2.4, -math.pi / 2),
-        ("blue_cube_4", "C"): (-7.0, -4.3, -math.pi / 2),
+        # Leave the pickup northward before approaching C. The old southern
+        # guide led directly alongside obstacle2's lane and could pin both
+        # robot and obstacle in a mutual stop near the pickup.
+        ("blue_cube_4", "C"): (-7.0, -2.4, -math.pi / 2),
     }
 
     def __init__(self):
@@ -91,9 +96,15 @@ class MainControllerNode(Node):
         self.PLACE_TIMEOUT = 8.0
         
         # 订阅器
+        # Candidate start positions must use the same localization source as
+        # Nav2. With identity map->odom, unused AMCL estimates may drift.
+        odom_map = self.declare_parameter('odom_map',
+            os.environ.get('AIC_ODOM_MAP', '0').lower() in ('1', 'true', 'yes')).value
         self.amcl_pose_sub = self.create_subscription(
-            PoseWithCovarianceStamped, "/amcl_pose", self._amcl_callback, self.qos_best_effort
+            Odometry if odom_map else PoseWithCovarianceStamped,
+            '/odom' if odom_map else '/amcl_pose', self._amcl_callback, self.qos_best_effort
         )
+        self.get_logger().info('选块定位来源：' + ('map 对齐的 /odom' if odom_map else '/amcl_pose'))
         self.chat_sub = self.create_subscription(
             String, "/chat", self._chat_callback, 10
         )

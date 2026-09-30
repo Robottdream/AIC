@@ -40,7 +40,9 @@
                 <ray>
                     <scan>
                         <horizontal>
-                            <samples>360</samples>
+                            <!-- 0.25 degree rays: at 7 m their 3.1 cm spacing
+                                 stays below the 5 cm costmap cell size. -->
+                            <samples>1441</samples>
                             <!-- One returned range per ray: interpolation creates phantom edge hits. -->
                             <resolution>1</resolution>
                             <min_angle>-3.14159</min_angle>
@@ -62,6 +64,10 @@
                     <ros>
                         <namespace>/</namespace>
                         <remapping>~/out:=${topic}</remapping>
+                        <qos><topic name="${topic}"><publisher>
+                            <reliability>best_effort</reliability>
+                            <history depth="5">keep_last</history>
+                        </publisher></topic></qos>
                     </ros>
                     <output_type>sensor_msgs/LaserScan</output_type>
                     <frame_name>${prefix}_link</frame_name>

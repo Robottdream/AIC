@@ -45,7 +45,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from rclpy.time import Time
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, PolygonStamped
 from nav2_msgs.action import ComputePathToPose
 from tf2_ros import Buffer, TransformListener
 
@@ -56,6 +56,12 @@ TRUTH_TOL = 0.75      # TF 定位与 Gazebo 真值的最大允许偏差（m）
 ROBOT_MODEL = 'six_arm'
 
 
+def stale_costmap_clocks(now, stamps):
+    """Legacy name: footprints carry the TF-derived robot pose timestamp."""
+    return {name: round(now - stamp, 3) for name, stamp in stamps.items()
+            if now - stamp > 3.0 or stamp - now > 1.0}
+
+
 class Preflight(Node):
     def __init__(self):
         super().__init__('nav_preflight')
@@ -63,13 +69,21 @@ class Preflight(Node):
         qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST)
         self.amcl = None
+        self.costmap_stamps = {}
         self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self._amcl_cb, qos)
+        for name in ('local', 'global'):
+            self.create_subscription(
+                PolygonStamped, '/%s_costmap/published_footprint' % name,
+                lambda msg, name=name: self._costmap_cb(name, msg), qos)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.plan_client = ActionClient(self, ComputePathToPose, '/compute_path_to_pose')
 
     def _amcl_cb(self, msg):
         self.amcl = (msg.pose.pose.position.x, msg.pose.pose.position.y)
+
+    def _costmap_cb(self, name, msg):
+        self.costmap_stamps[name] = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
 
     def spin_for(self, seconds):
         """按**墙钟**等待（不依赖 /clock，sim 时间不可用时也能正常判断）。"""
@@ -212,6 +226,16 @@ def main():
         # AMCL 在机器人静止时可能长时间不发 /amcl_pose（实测空闲时约 0.8 Hz 甚至更少），
         # 所以只当“参考之一”，拿不到不算失败；定位参考以 TF 为准。
         node.spin_for(6.0)
+        sim_now = node.get_clock().now().nanoseconds / 1e9
+        out['checks']['costmap_clock_lag_s'] = {
+            name: round(sim_now - stamp, 3) for name, stamp in node.costmap_stamps.items()}
+        clock_fail = stale_costmap_clocks(sim_now, node.costmap_stamps)
+        if clock_fail:
+            out['fail'] = 'Nav2 代价地图位姿时间戳过期或异常：%s；外部 TF 最新不代表 Nav2 内部位姿正常' % clock_fail
+            out['code'] = 11
+        elif len(node.costmap_stamps) < 2:
+            out['fail'] = '未收到局部/全局代价地图足迹，无法验证 Nav2 位姿是否持续更新'
+            out['code'] = 11
         if node.amcl is None:
             out['checks']['amcl_pose'] = '6 s 内无新数据（机器人静止时属正常）'
         else:
@@ -240,7 +264,9 @@ def main():
             out['fail'] = 'AMCL 的 map->odom 变换已过期 %.3f s，控制器可能误报到达' % tf_age
             out['code'] = 8
 
-        if out['code'] == 0 and node.amcl is not None:
+        odom_map = os.environ.get('AIC_ODOM_MAP', '').lower() in ('1', 'true', 'yes')
+        out['checks']['localization_source'] = 'static_map_odom' if odom_map else 'amcl'
+        if out['code'] == 0 and node.amcl is not None and not odom_map:
             d_tf = math.hypot(ref[0] - node.amcl[0], ref[1] - node.amcl[1])
             out['checks']['tf_vs_amcl'] = round(d_tf, 3)
             if d_tf > HEAD_TOL:

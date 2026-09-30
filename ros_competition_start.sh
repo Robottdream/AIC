@@ -34,7 +34,7 @@ PREFLIGHT_PY="$WS/tools/preflight_check.py"
 PREFLIGHT_OUT="$RUN_DIR/preflight.txt"
 NAMES="01_gazebo 02_moveit 03_nav2 04_llama 05_parser 06_nav 07_arm 08_detector 09_main 10_rosbridge 11_watchdog"
 WATCH_PERIOD=30
-NAV2_BIN_PATTERNS="/nav2_controller/controller_server /nav2_smoother/smoother_server /nav2_planner/planner_server /nav2_behaviors/behavior_server /nav2_bt_navigator/bt_navigator /nav2_waypoint_follower/waypoint_follower /nav2_velocity_smoother/velocity_smoother /nav2_amcl/amcl /nav2_map_server/map_server /nav2_lifecycle_manager/lifecycle_manager"
+NAV2_BIN_PATTERNS="/bot_navigation/scan_velocity_guard.py /nav2_collision_monitor/collision_monitor /nav2_controller/controller_server /nav2_smoother/smoother_server /nav2_planner/planner_server /nav2_behaviors/behavior_server /nav2_bt_navigator/bt_navigator /nav2_waypoint_follower/waypoint_follower /nav2_velocity_smoother/velocity_smoother /nav2_amcl/amcl /nav2_map_server/map_server /nav2_lifecycle_manager/lifecycle_manager"
 
 if grep -q $'\r' "$0" 2>/dev/null; then
   echo "[init] 脚本自身是 CRLF 行尾，转换为 LF 后重新执行..."
@@ -66,7 +66,13 @@ drop_pid() { grep -v "^$1:" "$PID_FILE" > "$PID_FILE.tmp" 2>/dev/null; mv -f "$P
 is_running() { p="$(pid_of "$1")"; [ -n "$p" ] && kill -0 "$p" 2>/dev/null; }
 
 has_publisher() { ros2 topic info "$1" 2>/dev/null | grep -qE 'Publisher count: [1-9]'; }
-has_data()      { timeout 6 ros2 topic echo --once "$1" >/dev/null 2>&1; }
+has_data() {
+  if [ "$1" = "/amcl_pose" ]; then
+    timeout -k 2 15 ros2 topic echo --once --no-daemon --qos-reliability reliable --qos-durability transient_local "$1" geometry_msgs/msg/PoseWithCovarianceStamped >/dev/null 2>&1
+  else
+    timeout -k 2 15 ros2 topic echo --once --no-daemon --qos-reliability best_effort "$1" sensor_msgs/msg/LaserScan >/dev/null 2>&1
+  fi
+}
 has_node()      { ros2 node list 2>/dev/null | grep -qx "$1"; }
 has_action()    { ros2 action list 2>/dev/null | grep -qx "$1"; }
 has_service()   { ros2 service list 2>/dev/null | grep -qx "$1"; }
@@ -76,11 +82,11 @@ port_open()     { ss -ltn 2>/dev/null | grep -q ":$1 " || has_node /rosbridge_we
 map_frame_ok()  { timeout 15 ros2 run tf2_ros tf2_echo map base_link 2>/dev/null | grep -qm1 'Translation'; }
 
 wait_gate() {
-  desc="$1"; limit="$2"; shift 2
-  i=0
-  while [ "$i" -lt "$limit" ]; do
-    if "$@" >/dev/null 2>&1; then echo "[就绪] $desc（$i s）"; return 0; fi
-    sleep 3; i=$((i+3))
+  local desc="$1" limit="$2" gate_start=$SECONDS
+  shift 2
+  while [ "$((SECONDS-gate_start))" -lt "$limit" ]; do
+    if "$@" >/dev/null 2>&1; then echo "[就绪] $desc（$((SECONDS-gate_start)) s）"; return 0; fi
+    sleep 3
   done
   echo "[警告] $desc 等待 $limit s 超时，继续后续步骤"
   return 1
@@ -192,6 +198,7 @@ run_preflight() {
 }
 
 nav2_recover() {
+  python3 "$WS/tools/nav_recovery_signal.py" true
   gzpose="$(gz_pose3)"
   pose="$gzpose"
   [ -z "$pose" ] && pose="$(amcl_pose3)"
@@ -217,6 +224,8 @@ nav2_recover() {
   start_mod 03_nav2 ros2 launch bot_navigation nav_bringup_gazebo.launch.py rviz:=$([ "$NO_RVIZ" = "1" ] && echo false || echo true)
   wait_gate "/planner_server 处于 active（重启后）" 150 is_active /planner_server
   wait_gate "/bt_navigator 处于 active（重启后）" 90 is_active /bt_navigator
+  wait_gate "/collision_monitor 处于 active（重启后）" 60 is_active /collision_monitor
+  wait_gate "/scan_velocity_guard 节点（重启后）" 30 has_node /scan_velocity_guard
   if [ -n "$gzpose" ]; then
     set_initial_pose_from_truth
   elif [ -n "$pose" ]; then
@@ -226,6 +235,7 @@ nav2_recover() {
     echo "[警告] 重启前没拿到位姿，AMCL 会回到 initial_pose(0,0,0)；机器人不在原点时请手工发 /initialpose"
   fi
   wait_gate "map->odom 恢复发布" 90 map_frame_ok
+  python3 "$WS/tools/nav_recovery_signal.py" false
 }
 
 heal_nav() {
@@ -310,7 +320,7 @@ arm_ready() {
 start_all() {
   load_env
   if ! is_running 01_gazebo && ! is_running 03_nav2 && command -v fastdds >/dev/null 2>&1; then
-    timeout 8 ros2 daemon stop >/dev/null 2>&1 || true
+    timeout -k 2 8 ros2 daemon stop >/dev/null 2>&1 || true
     # The upstream tool removes only abandoned shared-memory files.
     timeout 8 fastdds shm clean > "$RUN_DIR/dds-clean.log" 2>&1 || true
   fi
@@ -356,6 +366,8 @@ start_all() {
     if [ "$attempt" -lt 2 ]; then nav2_recover; fi
   done
   wait_gate "/bt_navigator 处于 active" 60 is_active /bt_navigator
+  wait_gate "/collision_monitor 处于 active" 60 is_active /collision_monitor
+  wait_gate "/scan_velocity_guard 节点" 30 has_node /scan_velocity_guard
   wait_gate "/amcl_pose 有数据" 120 has_data /amcl_pose
 
   echo "=== 4/11 llama-server（本地大模型服务端）==="
@@ -377,7 +389,7 @@ start_all() {
   fi
 
   echo "=== 10/11 rosbridge（Foxglove 看板）==="
-  start_mod 10_rosbridge ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+  start_mod 10_rosbridge ros2 launch "$WS/tools/rosbridge_safe.launch.py"
   wait_gate "rosbridge :9090" 60 port_open 9090
 
   if [ "$NO_RVIZ" = "1" ]; then
@@ -436,7 +448,7 @@ show_status() {
   printf 'rosbridge :9090       : '; port_open 9090 && echo ok || echo "no"
   printf '最近一次导航体检      : %s\n' "$(tail -1 "$PREFLIGHT_OUT" 2>/dev/null || echo '(未跑过)')"
   echo "--- 相关进程（含未被本脚本跟踪的）---"
-  ps -eo pid,args | grep -E 'gzserver|gzclient|move_group|rviz2|llama-server|main_controller|simple_navigator|command_parser|arm_grab|color_detector|rosbridge|component_container|controller_server|planner_server|bt_navigator|behavior_server|smoother_server|velocity_smoother|waypoint_follower|/nav2_amcl/amcl|/nav2_map_server/map_server|/nav2_lifecycle_manager/lifecycle_manager|/robot_state_publisher/robot_state_publisher' | grep -v grep | cut -c1-108
+  ps -eo pid,args | grep -E 'gzserver|gzclient|move_group|rviz2|llama-server|main_controller|simple_navigator|command_parser|arm_grab|color_detector|rosbridge|component_container|scan_velocity_guard|collision_monitor|controller_server|planner_server|bt_navigator|behavior_server|smoother_server|velocity_smoother|waypoint_follower|/nav2_amcl/amcl|/nav2_map_server/map_server|/nav2_lifecycle_manager/lifecycle_manager|/robot_state_publisher/robot_state_publisher' | grep -v grep | cut -c1-108
 }
 
 stop_all() {
@@ -454,7 +466,7 @@ stop_all() {
   done
   sleep 3
   : > "$PID_FILE"
-  left="$(ps -eo pid,stat,args | grep -E 'gzserver|gzclient|move_group|rviz2|llama-server|main_controller|simple_navigator|command_parser|arm_grab|color_detector|rosbridge|component_container|controller_server|planner_server|bt_navigator|behavior_server|smoother_server|velocity_smoother|waypoint_follower|/nav2_amcl/amcl|/nav2_map_server/map_server|/nav2_lifecycle_manager/lifecycle_manager|/robot_state_publisher/robot_state_publisher' | grep -v grep | grep -v defunct | cut -c1-108)"
+  left="$(ps -eo pid,stat,args | grep -E 'gzserver|gzclient|move_group|rviz2|llama-server|main_controller|simple_navigator|command_parser|arm_grab|color_detector|rosbridge|component_container|scan_velocity_guard|collision_monitor|controller_server|planner_server|bt_navigator|behavior_server|smoother_server|velocity_smoother|waypoint_follower|/nav2_amcl/amcl|/nav2_map_server/map_server|/nav2_lifecycle_manager/lifecycle_manager|/robot_state_publisher/robot_state_publisher' | grep -v grep | grep -v defunct | cut -c1-108)"
   if [ -z "$left" ]; then
     echo "已全部停止，无残留（僵尸进程会自动被回收，不计入残留）"
   else

@@ -29,6 +29,7 @@
       "followMode": "follow-pose",
       "followTf": "map",
       "scene": {
+        "meshUpAxis": "z_up",
         "transforms": {
           "editable": false,
           "showLabel": false
@@ -278,7 +279,7 @@
       "advancedView": true,
       "value": "{\n  \"data\": \"抓取两个蓝色到A 区\"\n}",
       "foxglovePanelTitle": "对话框",
-      "topicName": "/chat",
+      "topicName": "/command",
       "datatype": "std_msgs/String"
     },
     "Image!1p1fyg9": {

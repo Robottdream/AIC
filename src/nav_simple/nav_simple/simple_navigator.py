@@ -2,11 +2,12 @@ import rclpy
 from rclpy.node import Node
 from rclpy.clock import Clock, ClockType
 from rclpy.parameter import Parameter
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Bool
 from nav2_msgs.action import NavigateToPose, ComputePathToPose
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import PoseStamped, Quaternion, PolygonStamped
 from tf_transformations import quaternion_from_euler
 from tf2_ros import Buffer, TransformListener
 from rclpy.time import Time
@@ -60,6 +61,17 @@ class SimpleNav2Navigator(Node):
         self.pending_operation = None
         self.last_nav_feedback = None
         self.goal_target = None
+        self.recovering = False
+        self.recovery_started = None
+        self.recovery_ready_since = None
+        self.resume_target = None
+        self.costmap_poses = {}
+        self.create_subscription(Bool, '/navigation/recovering', self.recovery_callback, 10)
+        for scope in ('local', 'global'):
+            self.create_subscription(PolygonStamped, '/'+scope+'_costmap/published_footprint',
+                lambda msg, key=scope: self.costmap_poses.update({key:
+                    (msg.header.stamp.sec + msg.header.stamp.nanosec/1e9, time.monotonic())}),
+                qos_profile_sensor_data)
         self.timeout_timer = self.create_timer(0.5, self.check_request_timeout, clock=Clock(clock_type=ClockType.STEADY_TIME))
         
         self.get_logger().info("增强版Nav2导航节点启动成功！")
@@ -75,7 +87,59 @@ class SimpleNav2Navigator(Node):
             except Exception as exc:
                 self.get_logger().warn(f"取消规划请求失败：{exc}")
 
+    def recovery_callback(self, msg):
+        if msg.data:
+            if self.recovery_started is None:
+                self.recovery_started = time.monotonic()
+                if self.pending_operation or self.current_goal_handle:
+                    self.resume_target = self.goal_target
+                self.request_id += 1
+                self.cancel_pending_plan()
+                self.pending_operation = None
+                self.last_nav_feedback = None
+                handle = self.current_goal_handle
+                self.current_goal_handle = None
+                if handle is not None:
+                    handle.cancel_goal_async()
+                self.get_logger().warn('导航栈恢复中，保留当前目标，等待恢复后续跑')
+            self.recovering = True
+            self.recovery_ready_since = None
+        else:
+            self.recovering = False
+
+    def check_recovery(self):
+        if self.recovery_started is None:
+            return False
+        now = time.monotonic()
+        if now - self.recovery_started > 120:
+            had_target = self.resume_target is not None
+            self.recovery_started = None
+            self.resume_target = None
+            if had_target:
+                self.status_pub.publish(String(data='failed: navigation_recovery_timeout'))
+            return True
+        sim = self.get_clock().now().nanoseconds/1e9
+        healthy = not self.recovering and all(
+            key in self.costmap_poses and
+            -0.1 <= sim-self.costmap_poses[key][0] < 1.0 and
+            now-self.costmap_poses[key][1] < 1.0 for key in ('local','global'))
+        if not healthy:
+            self.recovery_ready_since = None
+        elif self.recovery_ready_since is None:
+            self.recovery_ready_since = now
+        elif now-self.recovery_ready_since >= 2.0 and self.nav_client.server_is_ready() and self.plan_client.server_is_ready():
+            target = self.resume_target
+            self.resume_target = None
+            self.recovery_started = None
+            if target is not None and not self.emergency_stop_active:
+                self.request_id += 1
+                self.get_logger().info('导航位姿与服务恢复，重新规划并继续原目标')
+                self.send_goal(*target, self.request_id)
+        return True
+
     def check_request_timeout(self):
+        if self.check_recovery():
+            return
         now = time.monotonic()
         reason = None
         if self.pending_operation:
@@ -107,6 +171,7 @@ class SimpleNav2Navigator(Node):
         """处理紧急停止指令"""
         self.emergency_stop_active = msg.data
         if msg.data:
+            self.resume_target = None
             self.request_id += 1
             self.cancel_pending_plan()
             self.pending_operation = None
@@ -129,6 +194,7 @@ class SimpleNav2Navigator(Node):
             
             # 处理暂停指令
             if data["type"] == "pause":
+                self.resume_target = None
                 self.request_id += 1
                 self.cancel_pending_plan()
                 self.pending_operation = None
@@ -147,6 +213,7 @@ class SimpleNav2Navigator(Node):
                 return
             
             # 新目标使旧预规划与导航回调失效。
+            self.resume_target = None
             self.request_id += 1
             self.cancel_pending_plan()
             request_id = self.request_id
@@ -188,6 +255,11 @@ class SimpleNav2Navigator(Node):
     def send_goal(self, x, y, yaw, request_id):
         """发送导航目标"""
         self.goal_target = (float(x), float(y), float(yaw))
+        if self.recovering and self.recovery_started is None:
+            self.recovery_started = time.monotonic()
+        if self.recovery_started is not None:
+            self.resume_target = self.goal_target
+            return
         self.pending_operation = (request_id, time.monotonic(), "planning_acceptance")
         self.last_nav_feedback = None
         # 构造位姿消息

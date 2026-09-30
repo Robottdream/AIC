@@ -72,8 +72,10 @@ namespace gazebo
                       << ") -> (" << this->end_x << "," << this->end_y << ")" << std::endl;
             
             // 设置阻尼
-            this->link->SetLinearDamping(0.2);
-            this->link->SetAngularDamping(2.0);
+            // ODE damping is a per-step fraction in [0, 1], not a viscous coefficient.
+            // 2.0 reverses angular velocity every step and destabilizes contacts.
+            this->link->SetLinearDamping(0.001);
+            this->link->SetAngularDamping(0.01);
             
             // 初始化ROS 2
             this->InitROS(model_name);
@@ -164,13 +166,14 @@ namespace gazebo
                     nearest_x += t * path_dx;
                     nearest_y += t * path_dy;
                 }
-                double target_speed = std::min(this->speed, distance);
+                double target_speed = std::min(this->speed, 2.0 * distance);
                 double desired_vx = dir_x * target_speed +
                     std::max(-0.25, std::min(0.25, (nearest_x - current_x) * 0.8));
                 double desired_vy = dir_y * target_speed +
                     std::max(-0.25, std::min(0.25, (nearest_y - current_y) * 0.8));
-                double fx = 50.0 * (desired_vx - linear_vel.X());
-                double fy = 50.0 * (desired_vy - linear_vel.Y());
+                // A 0.3 kg obstacle must yield on contact rather than act as a ram.
+                double fx = 12.0 * (desired_vx - linear_vel.X());
+                double fy = 12.0 * (desired_vy - linear_vel.Y());
                 double magnitude = std::hypot(fx, fy);
                 if (magnitude > this->force && magnitude > 0.0)
                 {

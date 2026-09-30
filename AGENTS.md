@@ -1,5 +1,29 @@
 # AGENTS.md
 
+> 2026-09-30 Foxglove 模型资源修复：rosbridge safe launch 在原 9090 端口提供白名单网格 HTTP 读取，并在桥接出站 URDF 中解析 package URI，兼容 CBOR-raw；ROS 内部模型不变。真实连接验证 22 link、15 网格全部可读，Windows HTTP 与地图/图像回归通过；尚未直接检查界面渲染。仅适用于本机客户端，见 `docs/foxglove-robot-assets-20260930.md`。
+
+> 2026-09-30 TF 停更根因已捕获：GDB 确认 tf2_ros 0.25.23 异步等待存在锁顺序反转。新增 aic_tf2_fix，仅导航进程预加载兼容修复；原库压力测试 15 s 超时，修复后三次通过。420/240/120 s 运行及空闲监测均无位姿过期、无看门狗重启。静态 map→odom 模式下主控选块改用 /odom。首轮前四件成功，第五件与移动障碍互堵；调整 blue_cube_4→C 北侧引导点后 53.84 s 成功，红块送 B 57.31 s 成功。并非六件连续成功，动态相遇仍为有限验证；ROS 升级需审阅兼容库。详见 `docs/tf-deadlock-fix-20260930.md`。
+
+> 2026-09-30 中途停车接续：看门狗重启前后通知导航执行节点，保留目标，等待两张地图位姿与服务稳定后重新规划；急停/暂停不续跑，120 s 超时。静态里程计定位下不再因未参与导航的 AMCL 漂移误重启。主动重启后红块抓取接续成功，但返程真正位姿停更仍复现，超时后主控重试，最终 202.84 s 放置成功。根因未解决，见 `docs/task-recovery-20260930.md`。
+
+> 2026-09-30 转向提速：RPP 转向目标 1.0→1.5 rad/s，控制器与平滑器角加速度 1.2→2.4 rad/s²；直行与近障保护保持。出生点 90° 转向原配置 4.45 s，新配置三次 2.52–2.57 s；蓝块送 B 47.73 s 成功。仅有限验证，不能宣称所有墙角/动态障碍已解决。详见 `docs/turn-speed-20260930.md`。
+
+> 2026-09-30 桥接显示回归已修正：safe launch 漏带原 XML 消息上限，默认 1 MB 导致 CBOR-raw 大地图/相机分片序列化失败并大量打印。现显式 16 MB、发送队列 16；真实 WebSocket 已收到约 3.94 MB 地图与 2.76 MB 图像，发令复测通过。未测量 Foxglove 界面渲染 FPS；仿真实时因子约 0.946。详见 docs/foxglove-command-20260930.md 后续回归记录。
+
+> 2026-09-30 Foxglove 发令入口修正：demo1.json 的自然语言发布面板改为 /command；/chat 只接收解析后的任务数组。启动脚本使用 tools/rosbridge_safe.launch.py，服务请求工作线程、5 秒超时，并通过 rosapi_safe.py 处理消失节点查询返回 None 的崩溃。真实 WebSocket 测试消息已抵达解析器，无运动测试。旧的已打开布局需修改发布话题或重新导入。详见 docs/foxglove-command-20260930.md。
+
+> 2026-09-30 障碍残影二次修正：运行参数确认 inf_is_valid 已启用，连续移动圆形障碍试验仍在约 1 度光束下留下 31 个障碍格。将真实射线增加至 1441 束、保持 resolution=1 后残影 0，真实障碍保留。实际一键冷启动通过，两路雷达约 10 Hz（仿真时间）、实时因子 0.940；未逐格复核用户截图，也不解决 Nav2 内部 TF 位姿过期。详见 `docs/ghost-obstacles-20260930.md` 第二轮记录。
+
+> 2026-09-30 障碍残影：两套导航参数的局部/全局雷达源启用 inf_is_valid，让 Gazebo +Inf 无回波光束参与射线清障。隔离 Nav2 对照复现旧配置残留占用 100，修正后清空为 0，同时保留真实障碍 100。配置已同步并重建，尚未现场复核截图所有黑点；不解决 TF 位姿停更。详见 `docs/ghost-obstacles-20260930.md`。
+
+> 2026-09-30 原地旋转排障：最终速度保护新增局部/全局 Nav2 位姿过期停车，10 项隔离测试通过；两件蓝块送 B 159.83 秒完成，但途中仍有导航失败、接受超时及看门狗重启。默认 ROS 环境改用已安装 Cyclone DDS 环回小包配置，手动 ROS 命令需 source tools/ros_env.sh。核对 Humble 源码后纠正历史“代价地图时钟冻结”说法：published_footprint 携带 TF 派生位姿时间戳，只能证明内部位姿过期，不能证明节点时钟冻结。该问题仍复现，未根治。详见 `docs/spin-fix-20260930.md`。
+
+> 2026-09-30 新增可选雷达运动预测保护，`AIC_DYNAMIC_GUARD=1` 启用，默认关闭。使用扫描时间戳 TF、轮廓边界估速及 1.8 秒恒速碰撞预测，不依赖 Gazebo 障碍真值。最终版本横穿/反向穿越 31.84/36.71 秒成功，蓝块送 B 52.41 秒成功；接近走廊被初始规划拒绝，真实迎面相遇尚未验证。仍可能误停/漏检，不能替代主动让行；代价地图时钟停更仍复现。详见 `docs/dynamic-prediction-20260930.md`。
+
+> 2026-09-30 移动障碍处理已调整：20 Hz 控制、10/5 Hz 局部/全局地图、2 Hz 重规划；恢复优先等待，恢复速度同样经过平滑器、Collision Monitor 和最终雷达/命令失联保护。保留近障停车与 2 秒碰撞时间减速，移除会导致超慢转向的固定减速区。障碍物非法角阻尼、惯量及持续推力已修正，全局物理参数维持原设置。受控横穿 29.83 秒成功，最近中心距离 0.68 m，无飞起/倾覆；横穿后蓝块送 B 全流程 40.10 秒成功。尚无动态轨迹预测，只完成有限相遇验证；任务后空闲仍复现全局代价地图时间戳停更。证据与局限见 `docs/dynamic-obstacle-fix-20260930.md`。
+
+> 2026-09-30 提速配置已验证：默认改用 RPP 跟踪器，直行目标上限 0.70 m/s、原地转向 1.00 rad/s；Gazebo 驱动不再二次限加速度，由 Nav2 平滑器统一限加减速。本机 DDS 默认使用环回接口与单播发现；通过 `AIC_ROS_LOCALHOST_ONLY=0` 可在启动前覆盖本机限制。启动/看门狗新增代价地图时间戳检查 `FAIL:11`。最终冷启动六件全部完成，任务耗时合计 305.87 秒（含探针等待的总跨度 320.93 秒）；相同前三件由 140.66 降至 125.15 秒。六件执行期间无导航恢复或看门狗重启，六个物块中心在目标区内；轮后空闲仍出现时间戳停更，两次触发看门狗恢复。不能声称 DDS/墙角风险已根治。详情见 `docs/speed-optimization-20260930.md`。
+
 > 2026-09-28 新底盘已接入：48×40×10 cm 底盘、45.4 cm 轮距，导航包络 58×55.2 cm。低位 `/scan` 保留，高位 `/scan_high` 为补充观测。仿真静态定位模式通过 `navigation_tf_relay` 保留原时间戳转发底盘 TF；动态 AMCL 模式不启用此转发。C 区停车点后移 55 cm。运行证据及仍存在的心跳超时风险见 `log/robot-concept-integration/report.md`。
 
 > 面向在本仓库工作的 AI Agent / 协作者：项目定位、架构、接口、构建运行方式与改动约定。
@@ -15,8 +39,8 @@
 2. **路径映射。** `E:\workspace\AIC` ⇔ `/mnt/e/workspace/AIC`（同一份文件，DrvFs 挂载）。文档、脚本、给用户看的命令一律写 WSL 路径。
 3. **历史文本文件多为 CRLF；本轮修改的维护文件已统一为 LF。** 直接执行 `.sh` 会报 `bad interpreter: /bin/bash^M`；shell 脚本使用前先 `sed -i 's/\r$//' <file>`（实测：原样的 6 个 `.sh` 全是 CRLF；但 `ros_competition_start.sh` 已重写为 LF 并自带 CRLF 自愈，可直接执行）。Python 文件带 CRLF 不影响运行，但改动时建议统一成 LF。
 4. **`runtime/models/` 在 Windows 侧那份里是空的**，权重不在 Git 中。可用的 491 MB GGUF 与已编译的 `llama-server` 在 WSL 的 `~/AIC` 与 `~/ws_aic` 里（后者已自包含，见 §2.3 / §2.4）。
-5. **本仓库的 Git 处于危险状态**：HEAD（提交 `062b5f8 整理文件`）是一棵**空树**，一次性删掉了 3789 个文件，当前工作区内容**全部未跟踪**。
-   `git checkout .` / `git clean -fdx` 会直接抹掉源码。动 Git 之前先 `git add -A` 建立基线。
+5. **Git 基线已恢复**：历史提交 `062b5f8 整理文件` 曾是删除 3789 个文件的空树；2026-09-30 已恢复工作区基线并上传 GitHub，当前基线为 `b2017c5`，源码已跟踪。
+   后续先检查 `git status` / `git diff`，选择性暂存维护文件，避免把本地权重、构建产物或运行日志混入提交。不要执行未经审阅的 `git checkout .` / `git restore .` / `git clean -fdx`。
 
 ---
 
@@ -136,7 +160,7 @@ AIC/                                   # = /mnt/e/workspace/AIC
 ├── demo1.json                         # Foxglove 布局（3D + /chat + 两路图像面板）
 ├── ros_competition_start.sh           # 一键启动/停止/状态脚本（WSL 适配版，LF；原版见 *.before-wsl）
 ├── .gitattributes / .gitignore
-└── .git/                              # ⚠️ HEAD 为空树，工作区全部未跟踪（见 §0.5）
+└── .git/                              # 已恢复并上传的 Git 基线（见 §0.5）
 ```
 
 参考文档（二进制，简单工具读不了，需要时用 Office/PDF 工具打开）：[运行步骤.txt](docs/运行步骤.txt)、[总步骤.pdf](docs/总步骤.pdf)、[相关接口说明.pdf](docs/相关接口说明.pdf)、[总评分表.pdf](docs/总评分表.pdf)、[技术文档（国赛）.pdf](docs/技术文档（国赛）.pdf)。
@@ -462,7 +486,7 @@ ros2 topic pub --once /manual_nav_target std_msgs/String \
 9. `yzbot/tools_demo` 是调试工具，`chat_interactive_ros.py` 发布到 `/llama_command`（**不是** `/command`），不要接进主流程。
 10. 新增依赖时同步更新对应 `package.xml` 与 `setup.py`，并重新 `colcon build`。
 11. **改了机器人出生点或换了地图，要同步 AMCL 初始位姿**：[`originbot_nav2.yaml`](src/yzbot/bot_navigation/param/originbot_nav2.yaml) 里 `amcl` 段的 `set_initial_pose: True` 与 `initial_pose.x/y/yaw` 必须等于 Gazebo 世界里的出生位姿（当前 `spawn_entity` 不带坐标，出生在原点，所以是 0/0/0）。
-12. **Git 操作前先建基线**：`git status` 现在显示整个仓库未跟踪、HEAD 为空树；先 `git add -A && git commit` 再谈分支/回滚。不要执行 `git checkout .`、`git restore .`、`git clean -fdx`。
+12. **Git 操作前检查现有改动**：基线已恢复，先查看 `git status` / `git diff`，不要重复全量暂存模型权重或其他本机产物。不要执行未经审阅的 `git checkout .`、`git restore .`、`git clean -fdx`。
 13. **改动要落在明确的一份副本上**（`/mnt/e/workspace/AIC`、`~/AIC`、`~/ws_aic`），跨副本同步后要重新 `colcon build` 并复跑验证。
 
 ---

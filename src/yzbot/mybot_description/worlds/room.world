@@ -4001,14 +4001,14 @@
       <max_contacts>10</max_contacts>
       <surface>
         <contact>
-          <ode/>
+          <ode><kp>100000</kp><kd>100</kd><max_vel>0.5</max_vel><min_depth>0.001</min_depth></ode>
         </contact>
         <bounce/>
         <friction>
           <torsional>
             <ode/>
           </torsional>
-          <ode/>
+          <ode><mu>0.2</mu><mu2>0.2</mu2></ode>
         </friction>
       </surface>
     </collision>
@@ -4028,9 +4028,9 @@
     <inertial>
       <mass>0.3</mass>  <!-- 较轻的质量 -->
       <inertia>
-        <ixx>0.0084375</ixx>
-        <iyy>0.0084375</iyy>
-        <izz>0.0084375</izz>
+        <ixx>0.028125</ixx>
+        <iyy>0.028125</iyy>
+        <izz>0.028125</izz>
         <ixy>0</ixy>
         <ixz>0</ixz>
         <iyz>0</iyz>
@@ -4043,7 +4043,7 @@
   </link>
   <plugin name='simple_move_plugin2' filename='libsimple_move_plugin.so'>
     <speed>0.35</speed>       <!-- 限制移动障碍物的碰撞速度 -->
-    <force>10.0</force>       <!-- 比原来15N更低的最大推力 -->
+    <force>1.5</force>       <!-- 最大加速度约5m/s²，受阻时让行 -->
     <start_x>-9.0</start_x>   <!-- 起点X坐标 -->
     <start_y>-4.2</start_y>   <!-- 起点Y坐标 -->
     <end_x>-5.0</end_x>       <!-- 终点X坐标 -->
@@ -4065,14 +4065,14 @@
       <max_contacts>10</max_contacts>
       <surface>
         <contact>
-          <ode/>
+          <ode><kp>100000</kp><kd>100</kd><max_vel>0.5</max_vel><min_depth>0.001</min_depth></ode>
         </contact>
         <bounce/>
         <friction>
           <torsional>
             <ode/>
           </torsional>
-          <ode/>
+          <ode><mu>0.2</mu><mu2>0.2</mu2></ode>
         </friction>
       </surface>
     </collision>
@@ -4092,9 +4092,9 @@
     <inertial>
       <mass>0.3</mass>  <!-- 较轻的质量 -->
       <inertia>
-        <ixx>0.0084375</ixx>
-        <iyy>0.0084375</iyy>
-        <izz>0.0084375</izz>
+        <ixx>0.028125</ixx>
+        <iyy>0.028125</iyy>
+        <izz>0.028125</izz>
         <ixy>0</ixy>
         <ixz>0</ixz>
         <iyz>0</iyz>
@@ -4107,7 +4107,7 @@
   </link>
   <plugin name='simple_move_plugin3' filename='libsimple_move_plugin.so'>
     <speed>0.35</speed>       <!-- 限制移动障碍物的碰撞速度 -->
-    <force>10.0</force>       <!-- 比原来15N更低的最大推力 -->
+    <force>1.5</force>       <!-- 最大加速度约5m/s²，受阻时让行 -->
     <start_x>-2.5</start_x>   <!-- 起点X坐标 -->
     <start_y>3.0</start_y>    <!-- 起点Y坐标 -->
     <end_x>-2.5</end_x>       <!-- 终点X坐标 -->
