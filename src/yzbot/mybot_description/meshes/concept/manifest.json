@@ -1,0 +1,162 @@
+{
+  "base_link": [
+    {
+      "file": "base_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 428
+    },
+    {
+      "file": "base_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 4772
+    },
+    {
+      "file": "base_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 7568
+    },
+    {
+      "file": "base_link_front_identification.stl",
+      "rgba": [
+        0.949999988079071,
+        0.33000001311302185,
+        0.06499999761581421,
+        1.0
+      ],
+      "triangles": 428
+    },
+    {
+      "file": "base_link_optical_window.stl",
+      "rgba": [
+        0.05999999865889549,
+        0.25,
+        0.3199999928474426,
+        1.0
+      ],
+      "triangles": 3060
+    }
+  ],
+  "left_wheel_link": [
+    {
+      "file": "left_wheel_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "left_wheel_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "left_wheel_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "left_wheel_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 11984
+    }
+  ],
+  "right_wheel_link": [
+    {
+      "file": "right_wheel_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "right_wheel_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "right_wheel_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "right_wheel_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 11984
+    }
+  ],
+  "backl_caster_link": [
+    {
+      "file": "backl_caster_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 960
+    }
+  ],
+  "backr_caster_link": [
+    {
+      "file": "backr_caster_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 960
+    }
+  ]
+}

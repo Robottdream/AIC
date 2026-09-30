@@ -24,6 +24,7 @@ runtime/
 *.a
 *.zip
 *.before-*
+*.blend1
 
 # Reference documents and local task data outside the source tree
 /*.pdf

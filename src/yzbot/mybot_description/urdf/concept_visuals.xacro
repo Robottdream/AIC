@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:macro name="concept_visual" params="link">
+<xacro:if value="${link == 'base_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/base_link_blue_gray_chassis.stl"/></geometry><material name="concept_base_link_0"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/base_link_light_alloy.stl"/></geometry><material name="concept_base_link_1"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/base_link_sensor_housing.stl"/></geometry><material name="concept_base_link_2"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/base_link_front_identification.stl"/></geometry><material name="concept_base_link_3"><color rgba="0.949999988079071 0.33000001311302185 0.06499999761581421 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/base_link_optical_window.stl"/></geometry><material name="concept_base_link_4"><color rgba="0.05999999865889549 0.25 0.3199999928474426 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'left_wheel_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/left_wheel_link_dark_rubber.stl"/></geometry><material name="concept_left_wheel_link_0"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/left_wheel_link_light_alloy.stl"/></geometry><material name="concept_left_wheel_link_1"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/left_wheel_link_blue_gray_chassis.stl"/></geometry><material name="concept_left_wheel_link_2"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/left_wheel_link_sensor_housing.stl"/></geometry><material name="concept_left_wheel_link_3"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'right_wheel_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/right_wheel_link_dark_rubber.stl"/></geometry><material name="concept_right_wheel_link_0"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/right_wheel_link_light_alloy.stl"/></geometry><material name="concept_right_wheel_link_1"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/right_wheel_link_blue_gray_chassis.stl"/></geometry><material name="concept_right_wheel_link_2"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/right_wheel_link_sensor_housing.stl"/></geometry><material name="concept_right_wheel_link_3"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'backl_caster_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/backl_caster_link_dark_rubber.stl"/></geometry><material name="concept_backl_caster_link_0"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'backr_caster_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/concept/backr_caster_link_dark_rubber.stl"/></geometry><material name="concept_backr_caster_link_0"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+</xacro:if>
+</xacro:macro>
+</robot>

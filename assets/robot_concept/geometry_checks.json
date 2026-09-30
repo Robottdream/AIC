@@ -1,0 +1,39 @@
+{
+  "body_m": [
+    0.48,
+    0.4,
+    0.1
+  ],
+  "wheel_radius_m": 0.065,
+  "wheel_width_m": 0.05,
+  "wheel_to_body_gap_m": 0.002,
+  "wheel_ground_z_m": 0,
+  "support_ground_z_m": 0,
+  "robot_bounds": {
+    "min": [
+      -0.23999999463558197,
+      -0.25599998235702515,
+      -1.0927847515773692e-09
+    ],
+    "max": [
+      0.24150000512599945,
+      0.25599998235702515,
+      0.6770000457763672
+    ]
+  },
+  "arm_reference_bounds": {
+    "min": [
+      -0.10860859602689743,
+      -0.05000000074505806,
+      0.18000000715255737
+    ],
+    "max": [
+      0.29144418239593506,
+      0.05000000074505806,
+      0.6177967190742493
+    ]
+  },
+  "validation": "Geometry concept; physics and full workspace unverified",
+  "lidar_scan_plane_m": 0.66,
+  "lidar_above_reference_arm_m": 0.042203280925750764
+}
