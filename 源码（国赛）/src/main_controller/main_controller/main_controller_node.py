@@ -48,6 +48,8 @@ class MainControllerNode(Node):
         
         # 核心变量
         self.current_robot_pose = (0.0, 0.0)
+        self.current_robot_yaw = 0.0
+        self.turn_cost_weight = float(self.declare_parameter("turn_cost_weight", 0.20).value)
         self.plan_client = ActionClient(self, ComputePathToPose, "/compute_path_to_pose")
         self.selection_id = 0
         self.failed_blocks_for_step = set()
@@ -77,6 +79,8 @@ class MainControllerNode(Node):
         # 超时设置
         self.GRASP_TIMEOUT = 8.0
         self.PLACE_TIMEOUT = 8.0
+        self.max_place_retry = 3
+        self.current_place_retry = 0
         
         # 订阅器
         self.amcl_pose_sub = self.create_subscription(
@@ -164,6 +168,25 @@ class MainControllerNode(Node):
             ) for a, b in zip(points, points[1:])
         )
 
+    @staticmethod
+    def _endpoint_turn_cost(path, start_yaw, end_yaw):
+        """Estimate endpoint rotations using 0.35 m chords, avoiding grid jitter."""
+        points = [(p.pose.position.x, p.pose.position.y) for p in path.poses]
+        if len(points) < 2:
+            return 0.0
+        def heading(origin, candidates, reverse=False):
+            for point in candidates:
+                dx, dy = point[0] - origin[0], point[1] - origin[1]
+                if math.hypot(dx, dy) >= 0.35:
+                    return math.atan2(-dy, -dx) if reverse else math.atan2(dy, dx)
+            return None
+        first = heading(points[0], points[1:])
+        last = heading(points[-1], reversed(points[:-1]), reverse=True)
+        def difference(a, b):
+            return abs(math.atan2(math.sin(a - b), math.cos(a - b)))
+        return ((difference(first, start_yaw) if first is not None else 0.0)
+                + (difference(end_yaw, last) if last is not None else 0.0))
+
     def _select_reachable_block(self):
         """每件货物从当前定位出发，按 Nav2 实际往返路径重新选块。"""
         if not self.current_assignment:
@@ -224,6 +247,16 @@ class MainControllerNode(Node):
         remaining = self._remaining_same_area_tasks()
         if remaining == 0:
             return self.selection_best
+        # In this five-cargo layout, the west red block is safest from the
+        # initial pose. Reaching it later from area A crossed the narrow wall
+        # during validation; use the previously completed order when reachable.
+        if (self.current_task["color"] == "red" and self.current_task["to"] == "A"
+                and self.current_task.get("original_num") == 3
+                and self.current_task.get("current_index") == 1):
+            preferred = [option for option in self.selection_options if option[2][2] == 3]
+            if preferred:
+                cost, _, block, direction = min(preferred, key=lambda option: option[0])
+                return (cost, block, direction)
 
         future_cost_by_block = {}
         for current_cost, return_length, block, candidate_index in self.selection_options:
@@ -313,6 +346,8 @@ class MainControllerNode(Node):
             block, candidate_index, candidate = self._active_candidate
             if not returning:
                 self._outbound_length = length
+                self._outbound_turn_cost = self.turn_cost_weight * self._endpoint_turn_cost(
+                    response.result.path, self.current_robot_yaw, candidate[2])
                 request = ComputePathToPose.Goal()
                 request.start = self._pose_stamped(*candidate)
                 area = self.current_assignment["area_pos"]
@@ -323,12 +358,15 @@ class MainControllerNode(Node):
                     lambda result: self._plan_response(result, selection_id, True)
                 )
                 return
-            total_length = self._outbound_length + length
+            # Express turning effort in equivalent metres; retain validated approach preferences.
+            return_cost = length + self.turn_cost_weight * self._endpoint_turn_cost(
+                response.result.path, candidate[2], 0.0)
+            total_length = self._outbound_length + self._outbound_turn_cost + return_cost
             ranking_cost = total_length + self._approach_penalty(
                 self.current_task["color"], block[2], candidate_index
             )
             self.selection_options.append(
-                (ranking_cost, length, block, candidate_index)
+                (ranking_cost, return_cost, block, candidate_index)
             )
             if self.selection_best is None or ranking_cost < self.selection_best[0]:
                 self.selection_best = (ranking_cost, block, candidate_index)
@@ -559,6 +597,9 @@ class MainControllerNode(Node):
         self = self_ref()
         if not self:
             return
+        q = msg.pose.pose.orientation
+        self.current_robot_yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y*q.y + q.z*q.z))
         new_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y)
         if abs(new_pose[0] - self.current_robot_pose[0]) > 0.01 or \
            abs(new_pose[1] - self.current_robot_pose[1]) > 0.01:
@@ -765,6 +806,14 @@ class MainControllerNode(Node):
         elif status in ("emergency_stop", "paused"):
             self._stop_failed_task(f"导航已停止：{status}")
 
+    def _retry_area_navigation(self):
+        if self.retry_timer:
+            self.retry_timer.cancel()
+            self.retry_timer.destroy()
+            self.retry_timer = None
+        if self.current_step == "NAV_TO_AREA" and self.current_assignment:
+            self._send_current_area_target()
+
     def _stop_failed_task(self, reason):
         """保留未完成货物状态，停止后续任务，等待人工重新下达命令。"""
         self.get_logger().error(reason)
@@ -879,14 +928,13 @@ class MainControllerNode(Node):
         if not self.current_assignment:
             return
         self.place_confirmed = False
+        self.current_place_retry = 0
         area_pos = self.current_assignment["area_pos"]
         self.area_nav_targets = [(area_pos[0], area_pos[1], 0.0)]
-        # The B approach from blue_cube_5 crosses a narrow doorway. First
-        # align with its open center before entering; the two planned legs
-        # are approximately the same length as the direct path.
+        # The B approach from blue_cube_5 crosses a narrow doorway.
         if (self.current_task["to"] == "B" and self.selected_block
                 and self.selected_block[2] == "blue_cube_5"):
-            self.area_nav_targets.insert(0, (-1.8, -2.4, -math.pi / 2))
+            self.area_nav_targets.insert(0, (-1.8, -2.8, -math.pi / 2))
         self.area_nav_target_index = 0
         self.current_area_nav_retry = 0
         self._send_current_area_target()
@@ -909,6 +957,10 @@ class MainControllerNode(Node):
 
     # 触发放置
     def trigger_place(self):
+        if self.current_place_retry >= self.max_place_retry:
+            self._stop_failed_task("放置连续失败，停止后续任务并检查货物状态")
+            return
+        self.current_place_retry += 1
         self.get_logger().info("触发放置")
         self.place_confirmed = False
         self_ref = weakref.ref(self)

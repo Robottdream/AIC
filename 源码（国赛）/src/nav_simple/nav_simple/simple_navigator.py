@@ -2,12 +2,16 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
+from rclpy.qos import qos_profile_sensor_data
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Bool
 from nav2_msgs.action import NavigateToPose, ComputePathToPose
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import Pose, PoseStamped, Quaternion
 from tf_transformations import quaternion_from_euler
 import json
+import math
+import time
+from collections import deque
 
 class SimpleNav2Navigator(Node):
     def __init__(self):
@@ -34,6 +38,13 @@ class SimpleNav2Navigator(Node):
         self.emergency_stop_sub = self.create_subscription(
             Bool, "/emergency_stop", self.emergency_stop_callback, 10
         )
+        self.create_subscription(
+            String, "/current_target_cube", self.cube_callback, 10
+        )
+        self.create_subscription(
+            Pose, "/obstacle3/current_pose", self.obstacle_callback,
+            qos_profile_sensor_data
+        )
         
         # 发布话题
         self.status_pub = self.create_publisher(String, "/nav_status", 10)
@@ -49,15 +60,113 @@ class SimpleNav2Navigator(Node):
         self.current_goal_handle = None
         self.emergency_stop_active = False
         self.request_id = 0
+        self.goal_pose = None
+        self.near_goal_started = None
+        self.current_target_cube = ""
+        self.obstacle_samples = deque(maxlen=50)
+        self.pending_start_timer = None
+        self.crossing_max_wait = max(0.0, min(30.0, float(
+            self.declare_parameter("crossing_max_wait", 12.0).value)))
         
         self.get_logger().info("增强版Nav2导航节点启动成功！")
         self.get_logger().info("支持：紧急停止、路径中断")
         self.get_logger().info("用法：发布目标到/manual_nav_target")
 
+    def cube_callback(self, msg):
+        self.current_target_cube = msg.data.strip()
+
+    def obstacle_callback(self, msg):
+        now = self.get_clock().now().nanoseconds * 1e-9
+        if not math.isfinite(msg.position.y):
+            return
+        if self.obstacle_samples and now < self.obstacle_samples[-1][0]:
+            self.obstacle_samples.clear()  # Gazebo reset invalidates old velocities.
+        if self.obstacle_samples and now - self.obstacle_samples[-1][0] < 0.1:
+            return
+        self.obstacle_samples.append((now, msg.position.y))
+
+    def _cancel_pending_start(self):
+        if self.pending_start_timer is not None:
+            self.pending_start_timer.cancel()
+            self.destroy_timer(self.pending_start_timer)
+            self.pending_start_timer = None
+
+    @staticmethod
+    def _predicted_obstacle_y(y, velocity, seconds):
+        # obstacle3 travels between y=-2 and y=3 and reverses near each end.
+        # The Gazebo controller reverses within 0.2 m of an endpoint.
+        lower, upper = -1.8, 2.8
+        predicted = y + velocity * seconds
+        for _ in range(8):
+            if predicted > upper:
+                predicted = 2.0 * upper - predicted
+            elif predicted < lower:
+                predicted = 2.0 * lower - predicted
+            else:
+                break
+        return predicted
+
+    def _crossing_wait(self, nav_goal, path):
+        """Estimate a short wait when a planned path crosses obstacle3's track."""
+        if len(self.obstacle_samples) < 2:
+            return 0.0
+        now = self.get_clock().now().nanoseconds * 1e-9
+        if now - self.obstacle_samples[-1][0] > 1.0:
+            return 0.0
+        old_time, old_y = next(
+            ((t, y) for t, y in reversed(self.obstacle_samples)
+             if now - t >= 0.35), self.obstacle_samples[0]
+        )
+        dt = self.obstacle_samples[-1][0] - old_time
+        if dt < 0.2:
+            return 0.0
+        current_y = self.obstacle_samples[-1][1]
+        velocity = max(-0.40, min(0.40, (current_y - old_y) / dt))
+        if abs(velocity) < 0.03:
+            return 0.0
+        travelled = 0.0
+        crossing = None
+        for before, after in zip(path.poses, path.poses[1:]):
+            x1, y1 = before.pose.position.x, before.pose.position.y
+            x2, y2 = after.pose.position.x, after.pose.position.y
+            segment = math.hypot(x2 - x1, y2 - y1)
+            if (x1 + 2.5) * (x2 + 2.5) <= 0 and abs(x2 - x1) > 1e-5:
+                fraction = (-2.5 - x1) / (x2 - x1)
+                crossing = (y1 + fraction * (y2 - y1), travelled + segment * fraction)
+                break
+            travelled += segment
+        if crossing is None or not -2.5 <= crossing[0] <= 3.5:
+            return 0.0
+        crossing_y, distance = crossing
+        # An obstacle several metres ahead is already handled by Nav2's live
+        # costmap while driving. Holding a newly grasped block here parks the
+        # robot at the pickup point even though the path ahead is free.
+        if distance > 2.0:
+            return 0.0
+        travel_seconds = distance / 0.48
+        self.get_logger().info(
+            f"交叉预测评估: 交叉y={crossing_y:.2f} 路程={distance:.2f}m "
+            f"障碍y={current_y:.2f} 速度={velocity:.2f}m/s")
+        for delay_ticks in range(int(self.crossing_max_wait / 0.5) + 1):
+            delay = delay_ticks * 0.5
+            predicted = [self._predicted_obstacle_y(
+                current_y, velocity, max(0.0, travel_seconds + delay + offset)
+            ) for offset in (-2.0, 0.0, 2.0)]
+            obstacle_y = predicted[1]
+            if min(abs(y - crossing_y) for y in predicted) >= 1.35:
+                self.get_logger().info(
+                    f"回程交叉预测: 交叉 y={crossing_y:.2f}, "
+                    f"障碍当前 y={current_y:.2f}, 速度={velocity:.2f}, "
+                    f"预计 y={obstacle_y:.2f}, 等待={delay:.1f}s")
+                return delay
+        self.get_logger().warn("交叉点短时持续被占，交由 Nav2 实时避障")
+        return 0.0
+
     def emergency_stop_callback(self, msg):
         """处理紧急停止指令"""
         self.emergency_stop_active = msg.data
         if msg.data:
+            self._cancel_pending_start()
             self.request_id += 1
             self.get_logger().warn("接收到紧急停止指令")
             if self.current_goal_handle:
@@ -77,6 +186,7 @@ class SimpleNav2Navigator(Node):
             
             # 处理暂停指令
             if data["type"] == "pause":
+                self._cancel_pending_start()
                 self.request_id += 1
                 self.get_logger().info("接收到暂停指令")
                 if self.current_goal_handle:
@@ -92,6 +202,7 @@ class SimpleNav2Navigator(Node):
                 return
             
             # 新目标使旧预规划与导航回调失效。
+            self._cancel_pending_start()
             self.request_id += 1
             request_id = self.request_id
             # 取消当前导航（如果有）
@@ -147,6 +258,8 @@ class SimpleNav2Navigator(Node):
         pose.pose.orientation = Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3])
         
         goal_msg.pose = pose
+        self.goal_pose = pose
+        self.near_goal_started = None
 
         # 先在当前代价地图上验证目标是否有路径，避免盲目跑向固定抓取点。
         plan_goal = ComputePathToPose.Goal()
@@ -183,24 +296,49 @@ class SimpleNav2Navigator(Node):
                 self.get_logger().warn("目标点没有有效路径")
                 self.status_pub.publish(String(data="failed: no_path"))
                 return
-            self.get_logger().info("路径检查通过，开始导航")
-            nav_future = self.nav_client.send_goal_async(
-                nav_goal, feedback_callback=self.feedback_callback
-            )
-            nav_future.add_done_callback(
-                lambda f: self.goal_response_callback(f, request_id)
-            )
+            wait_seconds = self._crossing_wait(nav_goal, result.result.path)
+            if wait_seconds > 0.0:
+                deadline = self.get_clock().now().nanoseconds * 1e-9 + wait_seconds
+                def release():
+                    if request_id != self.request_id or self.emergency_stop_active:
+                        self._cancel_pending_start()
+                        return
+                    remaining = self._crossing_wait(nav_goal, result.result.path)
+                    if remaining == 0.0:
+                        self._cancel_pending_start()
+                        self._start_navigation(nav_goal, request_id)
+                    elif self.get_clock().now().nanoseconds * 1e-9 >= deadline:
+                        self._cancel_pending_start()
+                        self._start_navigation(nav_goal, request_id)
+                self.pending_start_timer = self.create_timer(0.25, release)
+            else:
+                self._start_navigation(nav_goal, request_id)
         except Exception as e:
             self.get_logger().error(f"读取规划结果失败：{e}")
             self.status_pub.publish(String(data="failed: planning_error"))
 
-    def feedback_callback(self, feedback_msg):
+    def _start_navigation(self, nav_goal, request_id):
+        self.get_logger().info("路径检查通过，开始导航")
+        nav_future = self.nav_client.send_goal_async(
+            nav_goal, feedback_callback=lambda msg: self.feedback_callback(msg, request_id)
+        )
+        nav_future.add_done_callback(
+            lambda future: self.goal_response_callback(future, request_id)
+        )
+
+    def feedback_callback(self, feedback_msg, request_id):
         """导航反馈"""
         try:
+            if request_id != self.request_id or self.goal_pose is None:
+                return
             feedback = feedback_msg.feedback
             x = feedback.current_pose.pose.position.x
             y = feedback.current_pose.pose.position.y
-            self.get_logger().debug(f"当前位置：x={x:.2f}, y={y:.2f}")
+            distance = math.hypot(x - self.goal_pose.pose.position.x,
+                                  y - self.goal_pose.pose.position.y)
+            if distance <= 0.5 and self.near_goal_started is None:
+                self.near_goal_started = time.monotonic()
+                self.get_logger().info(f"进入目标0.5米范围，距离={distance:.3f}m")
         except Exception as e:
             self.get_logger().error(f"处理反馈时出错：{str(e)}")
 
@@ -241,6 +379,9 @@ class SimpleNav2Navigator(Node):
             self.current_goal_handle = None
             
             if status == GoalStatus.STATUS_SUCCEEDED:
+                if self.near_goal_started is not None:
+                    elapsed = time.monotonic() - self.near_goal_started
+                    self.get_logger().info(f"目标末段耗时：{elapsed:.2f}s")
                 self.get_logger().info("导航成功！已到达目标点")
                 self.status_pub.publish(String(data="succeeded"))
             elif status == GoalStatus.STATUS_ABORTED:

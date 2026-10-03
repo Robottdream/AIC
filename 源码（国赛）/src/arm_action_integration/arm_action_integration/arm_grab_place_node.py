@@ -6,7 +6,6 @@ from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import String
 from linkattacher_msgs.srv import AttachLink, DetachLink
-import time
 
 class ArmGrabPlaceNode(Node):
     def __init__(self):
@@ -74,6 +73,7 @@ class ArmGrabPlaceNode(Node):
         self.current_joint_pos = None
         self.current_step = 0
         self.current_task = None  # "grab" / "place"
+        self.detach_attempts = 0
 
     # ===================== 6. 原有目标物块更新（保留不变）=====================
     def target_cube_callback(self, msg):
@@ -125,7 +125,6 @@ class ArmGrabPlaceNode(Node):
             result = future.result().result
             if result.error_code == 0:
                 self.get_logger().info("机械臂动作执行完成！")
-                time.sleep(0.05)  # 动作稳定延迟
                 step_done_callback()
             else:
                 self.get_logger().error(f"机械臂动作失败，错误码：{result.error_code}")
@@ -204,13 +203,13 @@ class ArmGrabPlaceNode(Node):
             if not response.success:
                 raise RuntimeError(response.message)
             self.get_logger().info(f"物块{self.attach_params['model2_name']}吸附成功！")
-            time.sleep(0.05)
             step_done_callback()
         except Exception as e:
             self.get_logger().error(f"吸附动作失败：{str(e)}")
             self._reset_execution()
 
     def send_detach_action(self, step_done_callback):
+        self.detach_attempts += 1
         self.get_logger().info(f"执行分离动作：机械臂 → 物块（{self.attach_params['model2_name']}）")
         req = DetachLink.Request()
         req.model1_name = self.attach_params["model1_name"]
@@ -228,11 +227,13 @@ class ArmGrabPlaceNode(Node):
             if not response.success:
                 raise RuntimeError(response.message)
             self.get_logger().info(f"物块{self.attach_params['model2_name']}分离成功！")
-            time.sleep(0.05)
             step_done_callback()
         except Exception as e:
             self.get_logger().error(f"分离动作失败：{str(e)}")
-            self.send_detach_action(step_done_callback)  # 重试分离
+            if self.detach_attempts < 3:
+                self.send_detach_action(step_done_callback)
+            else:
+                self._reset_execution()
 
     # ===================== 9. 修复：抓取/放置完成后发布状态给主控=====================
     def _grab_proceed(self):
@@ -283,12 +284,12 @@ class ArmGrabPlaceNode(Node):
             self.get_logger().info("步骤4：机械臂举高（回到初始位置）...")
             self.current_step = 4
             self.send_arm_action(self.arm_trajectory["lift"], self._after_arm_lift_place)
-            # The cube is detached and stationary. Start the next route now.
-            self.arm_status_pub.publish(String(data="place_succeeded"))
         elif self.current_step == 4:
             self.get_logger().info(f"放置流程全部完成！已分离物块：{self.attach_params['model2_name']}")
             self.current_step = 5
             self.is_executing = False
+            # Start the next route only after the arm has cleared the cargo.
+            self.arm_status_pub.publish(String(data="place_succeeded"))
 
     def _after_gripper_open(self):
         self._place_proceed()
@@ -301,8 +302,12 @@ class ArmGrabPlaceNode(Node):
 
     def _reset_execution(self):
         self.get_logger().info("重置执行状态...")
+        failed_task = self.current_task
         self.is_executing = False
         self.current_step = 0
+        if failed_task in ("grab", "place"):
+            status = "grasp_failed" if failed_task == "grab" else "place_failed"
+            self.arm_status_pub.publish(String(data=status))
 
     # ===================== 10. 原有回调（保留不变）=====================
     def cargo_callback(self, msg):
@@ -324,6 +329,7 @@ class ArmGrabPlaceNode(Node):
             self.get_logger().info(f"收到到达放置位置信号，准备分离物块：{self.attach_params['model2_name']}")
             self.is_executing = True
             self.current_task = "place"
+            self.detach_attempts = 0
             self.current_step = 1
             self.current_joint_pos = self.arm_trajectory["init"]
             self.get_logger().info("步骤1：机械臂弯曲到放置位置...")

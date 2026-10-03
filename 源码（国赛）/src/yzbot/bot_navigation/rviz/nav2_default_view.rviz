@@ -318,7 +318,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /map
+        Value: /visualization/map
       Update Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -345,7 +345,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_common/Group
       Displays:
-        - Alpha: 0.30000001192092896
+        - Alpha: 0.699999988079071
           Class: rviz_default_plugins/Map
           Color Scheme: costmap
           Draw Behind: false
@@ -357,7 +357,7 @@ Visualization Manager:
             Filter size: 10
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /global_costmap/costmap
+            Value: /visualization/global_costmap
           Update Topic:
             Depth: 5
             Durability Policy: Volatile
@@ -466,7 +466,7 @@ Visualization Manager:
       Name: Global Planner
     - Class: rviz_common/Group
       Displays:
-        - Alpha: 0.699999988079071
+        - Alpha: 0.5
           Class: rviz_default_plugins/Map
           Color Scheme: costmap
           Draw Behind: false
@@ -642,7 +642,7 @@ Visualization Manager:
       Value: true
   Enabled: true
   Global Options:
-    Background Color: 48; 48; 48
+    Background Color: 245; 245; 245
     Fixed Frame: odom
     Frame Rate: 30
   Name: root

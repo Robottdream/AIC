@@ -181,8 +181,8 @@ namespace gazebo
                 this->link->AddForceAtRelativePosition(
                     ignition::math::Vector3d(fx, fy, 0.0), center_of_mass);
 
-                // 定期输出状态
                 double current_time = _info.simTime.Double();
+                // 定期输出状态
                 
                 if (current_time - this->last_print_time >= 1.0)
                 {

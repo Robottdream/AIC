@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="laser">
 
     <xacro:macro name="lidar"
-        params="prefix:=laser gz_visualize:=false range_min:=0.10 range_max:=30.0">
+        params="prefix:=laser gz_visualize:=false range_min:=0.5 range_max:=30.0">
         <!-- Create laser reference frame -->
         <link name="${prefix}_link">
             <inertial>

@@ -29,6 +29,8 @@
 */
 
 #include <gazebo/common/Plugin.hh>
+#include <gazebo/common/Events.hh>
+#include <gazebo/common/Event.hh>
 #include <gazebo/physics/Entity.hh>
 #include <gazebo/physics/Light.hh>
 #include <gazebo/physics/Link.hh>
@@ -39,6 +41,13 @@
 #include <gazebo_ros/node.hpp>
 #include <memory>
 #include <cmath>
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <deque>
+#include <functional>
+#include <future>
+#include <mutex>
 
 #include "gazebo_ros/conversions/builtin_interfaces.hpp"
 #include "gazebo_ros/conversions/geometry_msgs.hpp"
@@ -76,6 +85,25 @@ public:
     linkattacher_msgs::srv::DetachLink::Request::SharedPtr _req,
     linkattacher_msgs::srv::DetachLink::Response::SharedPtr _res);
 
+  void AttachOnUpdate(
+    linkattacher_msgs::srv::AttachLink::Request::SharedPtr request,
+    linkattacher_msgs::srv::AttachLink::Response::SharedPtr response);
+  void DetachOnUpdate(
+    linkattacher_msgs::srv::DetachLink::Request::SharedPtr request,
+    linkattacher_msgs::srv::DetachLink::Response::SharedPtr response);
+  bool DispatchToUpdate(std::function<void()> action);
+  void OnWorldUpdate();
+
+  struct PendingOperation
+  {
+    std::function<void()> action;
+    std::promise<void> done;
+    std::atomic<bool> cancelled{false};
+  };
+  std::mutex pending_mutex_;
+  std::deque<std::shared_ptr<PendingOperation>> pending_;
+  gazebo::event::ConnectionPtr update_connection_;
+
   // World pointer from Gazebo.
   gazebo::physics::WorldPtr world_;
 
@@ -98,6 +126,7 @@ GazeboLinkAttacher::GazeboLinkAttacher()
 
 GazeboLinkAttacher::~GazeboLinkAttacher()
 {
+  impl_->update_connection_.reset();
 }
 
 void GazeboLinkAttacher::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf)
@@ -105,6 +134,11 @@ void GazeboLinkAttacher::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr 
   
   // Gazebo WORLD:
   impl_->world_ = _world;
+
+  // Apply joint and model changes in Gazebo's update thread. Calling them
+  // directly from ROS service threads can race ODE and crash gzserver.
+  impl_->update_connection_ = gazebo::event::Events::ConnectWorldUpdateBegin(
+    [this](const gazebo::common::UpdateInfo &) {impl_->OnWorldUpdate();});
 
   // ROS2 NODE:
   impl_->ros_node_ = gazebo_ros::Node::Get(_sdf);
@@ -123,7 +157,60 @@ void GazeboLinkAttacher::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr 
 
 }
 
+bool GazeboLinkAttacherPrivate::DispatchToUpdate(std::function<void()> action)
+{
+  auto operation = std::make_shared<PendingOperation>();
+  operation->action = std::move(action);
+  auto future = operation->done.get_future();
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    pending_.push_back(operation);
+  }
+  if (future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+    operation->cancelled.store(true);
+    return false;
+  }
+  return true;
+}
+
+void GazeboLinkAttacherPrivate::OnWorldUpdate()
+{
+  std::shared_ptr<PendingOperation> operation;
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    if (pending_.empty()) return;
+    operation = pending_.front();
+    pending_.pop_front();
+  }
+  if (!operation->cancelled.load()) operation->action();
+  operation->done.set_value();
+}
+
 void GazeboLinkAttacherPrivate::Attach(
+  linkattacher_msgs::srv::AttachLink::Request::SharedPtr request,
+  linkattacher_msgs::srv::AttachLink::Response::SharedPtr response)
+{
+  if (!DispatchToUpdate([this, request, response]() {
+      AttachOnUpdate(request, response);
+    })) {
+    response->success = false;
+    response->message = "Gazebo update timed out while attaching";
+  }
+}
+
+void GazeboLinkAttacherPrivate::Detach(
+  linkattacher_msgs::srv::DetachLink::Request::SharedPtr request,
+  linkattacher_msgs::srv::DetachLink::Response::SharedPtr response)
+{
+  if (!DispatchToUpdate([this, request, response]() {
+      DetachOnUpdate(request, response);
+    })) {
+    response->success = false;
+    response->message = "Gazebo update timed out while detaching";
+  }
+}
+
+void GazeboLinkAttacherPrivate::AttachOnUpdate(
   linkattacher_msgs::srv::AttachLink::Request::SharedPtr _req,
   linkattacher_msgs::srv::AttachLink::Response::SharedPtr _res)
 {
@@ -176,17 +263,13 @@ void GazeboLinkAttacherPrivate::Attach(
 
     // Create a fixed joint between the two links:
     JointName = _req->model1_name + "_" + _req->link1_name + "_" + _req->model2_name + "_" + _req->link2_name + "_joint";
-    gazebo::physics::JointPtr joint = model1->CreateJoint(JointName, "revolute", link1, link2);
+    // The carried block must be rigidly attached to the gripper. A revolute
+    // joint with zero limits is not a fixed joint, and axis 1 does not exist
+    // on a one-DOF joint (Gazebo reported SetDamping out of bounds).
+    gazebo::physics::JointPtr joint = model1->CreateJoint(JointName, "fixed", link1, link2);
     joint->Attach(link1, link2);
     joint->Load(link1, link2, ignition::math::Pose3d());
     joint->SetProvideFeedback(true);
-    
-    joint->SetAxis(0, ignition::math::Vector3d(1, 0, 0));
-    joint->SetUpperLimit(0, 0);
-    joint->SetLowerLimit(0, 0);
-    joint->SetEffortLimit(0, 0);
-    joint->SetDamping(1, 1.0);
-
     joint->Init();
     model1->Update();
 
@@ -212,7 +295,7 @@ void GazeboLinkAttacherPrivate::Attach(
 
 }
 
-void GazeboLinkAttacherPrivate::Detach(
+void GazeboLinkAttacherPrivate::DetachOnUpdate(
   linkattacher_msgs::srv::DetachLink::Request::SharedPtr _req,
   linkattacher_msgs::srv::DetachLink::Response::SharedPtr _res)
 {
@@ -226,8 +309,12 @@ void GazeboLinkAttacherPrivate::Detach(
     
     // (+) Remove joint --> This fixes the following problem: If the object to be attached is removed and spawned again, 
     // gazebo breaks when attaching it again, since the joint already existed. Joint must be REMOVED when detaching.
-    gazebo::physics::ModelPtr model1 = world_->ModelByName(_req->model1_name);
-    model1->RemoveJoint(JointName);
+    const std::string joint_name = j.joint->GetName();
+    j.m1->RemoveJoint(joint_name);
+    GV_joints.erase(std::remove_if(GV_joints.begin(), GV_joints.end(),
+      [&j](const JointSTRUCT &entry) {
+        return entry.joint == j.joint;
+      }), GV_joints.end());
 
     // A fixed-joint simulation can occasionally put a tiny cube far from the
     // gripper. Correct an implausible release pose before freezing the cube.

@@ -36,7 +36,7 @@ def generate_launch_description():
     map_yaml_path = LaunchConfiguration('map',default=os.path.join(navigation2_dir,f'maps/{map_yaml_file}'))
     nav2_param_path = LaunchConfiguration('params_file',default=os.path.join(navigation2_dir,'param','originbot_nav2.yaml'))
     slam = LaunchConfiguration('slam', default='False')  
-    rviz_config_dir = os.path.join(nav2_bringup_dir,'rviz','nav2_default_view.rviz')
+    rviz_config_dir = os.path.join(navigation2_dir, 'rviz', 'nav2_default_view.rviz')
     # slam = LaunchConfiguration('slam', default='True')
 
     return LaunchDescription([
@@ -52,6 +52,11 @@ def generate_launch_description():
                 'params_file': nav2_param_path,
                 'slam': slam,}.items(),
         ),
+        Node(
+            package='bot_navigation',
+            executable='bright_costmap.py',
+            name='bright_costmap',
+            output='screen'),
         Node(
             package='rviz2',
             executable='rviz2',
