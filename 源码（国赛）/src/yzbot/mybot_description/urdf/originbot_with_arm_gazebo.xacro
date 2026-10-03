@@ -147,7 +147,7 @@
 
             <!-- limits -->
             <max_wheel_torque>5</max_wheel_torque>
-            <max_wheel_acceleration>5.0</max_wheel_acceleration>
+            <max_wheel_acceleration>8.0</max_wheel_acceleration>
 
             <!-- output -->
             <command_topic>cmd_vel</command_topic>

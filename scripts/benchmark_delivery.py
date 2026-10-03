@@ -26,6 +26,9 @@ def start(name,args):
 try:
  start('gazebo',['ros2','launch','mybot','gazebo_world.launch.py'])
  time.sleep(12)
+ for gazebo_process in ('gzserver', 'gzclient'):
+  if subprocess.run(['pgrep', '-x', gazebo_process], stdout=subprocess.DEVNULL).returncode != 0:
+   raise RuntimeError(f'{gazebo_process} failed to start; see gazebo.log')
  start('nav2',['ros2','launch','nav2_bringup','bringup_launch.py','use_sim_time:=true','map:='+str(nav_share/'maps/map.yaml'),'params_file:='+str(nav_share/'param/originbot_nav2.yaml')])
  rclpy.init();node=Node('algorithm_trial')
  nav=ActionClient(node,NavigateToPose,'/navigate_to_pose')
