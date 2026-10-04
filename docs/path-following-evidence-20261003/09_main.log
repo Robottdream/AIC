@@ -1,0 +1,54 @@
+[INFO] [1791031211.690548095] [main_controller_node]: 选块定位来源：map 对齐的 /odom
+[INFO] [1791031211.698294386] [main_controller_node]: 主控节点（支持智能路径规划）启动成功
+[INFO] [1791031273.460800179] [main_controller_node]: 接收1个任务，队列长度：1
+[INFO] [1791031273.461652607] [main_controller_node]: 按出题顺序生成3个步骤，每步开始时重新规划可达物块
+[INFO] [1791031273.462346642] [main_controller_node]: 任务优化完成，共生成3个执行步骤
+[INFO] [1791031273.463064316] [main_controller_node]: 开始执行优化任务：1/3 个red物块 → A区
+[INFO] [1791031273.464850272] [main_controller_node]: 按当前代价地图检查20个抓取位置及返回目标区域的路径
+[INFO] [1791031276.017764959] [main_controller_node]: 连续任务前瞻改选：red_cube_4方向3
+[INFO] [1791031276.018829424] [main_controller_node]: 选定可达物块：red_cube_4，接近方向3
+[INFO] [1791031276.019722031] [main_controller_node]: 导航到物块途经点 1/1：(-8.15, 1.00)
+[INFO] [1791031276.020866026] [main_controller_node]: 导航到物块：red_cube_4（抓取位置：-8.15, 1.00）
+[INFO] [1791031276.409853689] [main_controller_node]: 初始定位：(-0.01, -0.01)
+[INFO] [1791031296.687513005] [main_controller_node]: 到达物块位置，准备抓取
+[INFO] [1791031296.687814072] [main_controller_node]: 触发抓取（重试次数：0/3）
+[INFO] [1791031298.374299467] [main_controller_node]: 机械臂抓取成功，立即前往目标区域
+[INFO] [1791031298.375108878] [main_controller_node]: 物块标记为已抓取：red_cube_4
+[INFO] [1791031298.375710171] [main_controller_node]: 导航到目标区域 A：(2.59, -5.73)
+[WARN] [1791031791.356913068] [main_controller_node]: 区域导航失败（failed: aborted），重试一次
+[INFO] [1791031791.357342219] [main_controller_node]: 导航到目标区域 A：(2.59, -5.73)
+[INFO] [1791032610.704760371] [main_controller_node]: 到达目标区域，准备放置
+[INFO] [1791032610.705654020] [main_controller_node]: 触发放置
+[INFO] [1791032612.798595467] [main_controller_node]: 机械臂放置成功，立即执行下一件
+[INFO] [1791032612.798915406] [main_controller_node]: 放置完成（1/3）
+[INFO] [1791032612.799163689] [main_controller_node]: 开始执行优化任务：2/3 个red物块 → A区
+[INFO] [1791032612.800662805] [main_controller_node]: 按当前代价地图检查16个抓取位置及返回目标区域的路径
+[INFO] [1791032614.632252768] [main_controller_node]: 连续任务前瞻改选：red_cube_3方向3
+[INFO] [1791032614.632619584] [main_controller_node]: 选定可达物块：red_cube_3，接近方向3
+[INFO] [1791032614.633035938] [main_controller_node]: 导航到物块途经点 1/2：(-6.50, 1.80)
+[INFO] [1791032614.633402232] [main_controller_node]: 导航到物块：red_cube_3（抓取位置：-5.19, 5.51）
+[INFO] [1791032643.863763122] [main_controller_node]: 导航到物块途经点 2/2：(-5.19, 5.51)
+[INFO] [1791032655.423127473] [main_controller_node]: 到达物块位置，准备抓取
+[INFO] [1791032655.423452676] [main_controller_node]: 触发抓取（重试次数：0/3）
+[INFO] [1791032657.404554251] [main_controller_node]: 机械臂抓取成功，立即前往目标区域
+[INFO] [1791032657.404854157] [main_controller_node]: 物块标记为已抓取：red_cube_3
+[INFO] [1791032657.405312369] [main_controller_node]: 导航到目标区域 A：(2.59, -5.73)
+[INFO] [1791032699.646358248] [main_controller_node]: 到达目标区域，准备放置
+[INFO] [1791032699.647170397] [main_controller_node]: 触发放置
+[INFO] [1791032702.850762216] [main_controller_node]: 机械臂放置成功，立即执行下一件
+[INFO] [1791032702.851426510] [main_controller_node]: 放置完成（2/3）
+[INFO] [1791032702.851857842] [main_controller_node]: 开始执行优化任务：3/3 个red物块 → A区
+[INFO] [1791032702.853066783] [main_controller_node]: 按当前代价地图检查12个抓取位置及返回目标区域的路径
+[INFO] [1791032704.329385794] [main_controller_node]: 选定可达物块：red_cube_2，接近方向4
+[INFO] [1791032704.329962025] [main_controller_node]: 导航到物块途经点 1/1：(9.60, -3.16)
+[INFO] [1791032704.330426088] [main_controller_node]: 导航到物块：red_cube_2（抓取位置：9.60, -3.16）
+[INFO] [1791032729.509341912] [main_controller_node]: 到达物块位置，准备抓取
+[INFO] [1791032729.509739963] [main_controller_node]: 触发抓取（重试次数：0/3）
+[INFO] [1791032731.563690566] [main_controller_node]: 机械臂抓取成功，立即前往目标区域
+[INFO] [1791032731.563992933] [main_controller_node]: 物块标记为已抓取：red_cube_2
+[INFO] [1791032731.564436923] [main_controller_node]: 导航到目标区域 A：(2.59, -5.73)
+[INFO] [1791032759.207841846] [main_controller_node]: 到达目标区域，准备放置
+[INFO] [1791032759.208219624] [main_controller_node]: 触发放置
+[INFO] [1791032761.563799376] [main_controller_node]: 机械臂放置成功，立即执行下一件
+[INFO] [1791032761.564139176] [main_controller_node]: 放置完成（3/3）
+[INFO] [1791032761.564377423] [main_controller_node]: 所有优化任务执行完成，等待新任务...

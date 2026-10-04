@@ -1,0 +1,63 @@
+{
+  "body_m": [
+    0.48,
+    0.48,
+    0.1
+  ],
+  "wheel_count": 4,
+  "rollers_per_wheel": 10,
+  "roller_angle_deg": 90,
+  "drive": "four radial-axis omni wheels",
+  "body_diameter_m": 0.48,
+  "wheel_center_z_m": 0.075,
+  "wheel_center_track_m": 0.39,
+  "arm_yaw_motor": true,
+  "robot_bounds": {
+    "min": [
+      -0.25272029638290405,
+      -0.2619999945163727,
+      -0.0014972290955483913
+    ],
+    "max": [
+      0.25272029638290405,
+      0.2619999945163727,
+      0.2669999897480011
+    ]
+  },
+  "arm_reference_bounds": {
+    "min": [
+      -0.10860859602689743,
+      -0.05000000074505806,
+      0.25999999046325684
+    ],
+    "max": [
+      0.29144418239593506,
+      0.05000000074505806,
+      0.697796642780304
+    ]
+  },
+  "validation": "Geometry concept; physics and full workspace unverified",
+  "lidar_count": 2,
+  "lidar_centers_m": [
+    [
+      0,
+      0.225,
+      0.194
+    ],
+    [
+      0,
+      -0.225,
+      0.194
+    ]
+  ],
+  "lidar_scan_plane_m": 0.194,
+  "lidar_assembly_top_m": 0.2110000103712082,
+  "reference_pose_yaw_sweep_vertical_gap_m": 0.048999980092048645,
+  "sweep_validation": "Vertical separation holds for any Z yaw of this fixed arm pose only; articulated and loaded sweeps unverified.",
+  "camera_forward_axis": "Local +X; conceptual optics, actual FoV unverified",
+  "camera_lens_front_x_m": 0.177,
+  "lidar_assembly_front_x_m": 0.0430000014603138,
+  "lidar_behind_camera_plane_gap_m": 0.1339999985396862,
+  "lidar_wheel_longitudinal_gap_m": 0.07280401512980461,
+  "max_fixed_body_radius_m": 0.3157900979282288
+}

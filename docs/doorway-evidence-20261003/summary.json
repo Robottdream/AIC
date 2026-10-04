@@ -1,0 +1,204 @@
+{
+  "before_pose": [
+    2.8912710353000026,
+    -1.9205495959228578
+  ],
+  "before_nearest_center_wall_distance": 0.3860743976179708,
+  "normal_stop_radius": 0.405,
+  "planning_nominal_radius": 0.45,
+  "planning_padding": 0.01,
+  "physical_ttc_footprint_radius": 0.325,
+  "max_speed": 1.0,
+  "trials": {
+    "exit-A": {
+      "status": 4,
+      "wall_seconds": 12.292315315999076,
+      "sim_seconds": 8.599999999999909,
+      "peak_speed": 1.000000001210221,
+      "recoveries": 0,
+      "minimum_lidar_clearance": 0.5553775288508348
+    },
+    "enter-A": {
+      "status": 4,
+      "wall_seconds": 14.990879950999442,
+      "sim_seconds": 9.400000000000091,
+      "peak_speed": 1.0000000190519056,
+      "recoveries": 0,
+      "minimum_lidar_clearance": 0.6264832065243768
+    }
+  },
+  "full_pick_place_task_tested": false,
+  "all_doorways_tested": false,
+  "carried_load_envelope_not_resolved": true,
+  "guard_check": {
+    "forward": [
+      1.0,
+      0.0,
+      0.2
+    ],
+    "diagonal": [
+      0.7071067811865475,
+      0.7071067811865475,
+      0.2
+    ],
+    "reverse": [
+      -1.0,
+      0.0,
+      0.2
+    ],
+    "below_limit": [
+      0.6,
+      0.2,
+      0.2
+    ],
+    "scan_loss_stops": true,
+    "command_loss_stops": true,
+    "pose_loss_stops": true,
+    "physical_footprint_radius": 0.325,
+    "passed": true,
+    "isolated_domain": 166,
+    "robot_motion": false
+  },
+  "dwb_check": {
+    "baseline": [
+      1.0,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "crossing": [
+      0.07500000000000001,
+      0.025,
+      0.0
+    ],
+    "approaching": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stale": [
+      1.0,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "approaching_all_candidates_rejected_stop": true,
+    "near_goal": [
+      0.07500000000000001,
+      0.07500000000000001,
+      0.0
+    ],
+    "known_linear": [
+      0.07500000000000001,
+      0.025,
+      0.0
+    ],
+    "known_turn": [
+      -0.20000000000000007,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "crossing_rejected": 25,
+    "isolated_domain": 164,
+    "robot_motion": false,
+    "passed": true
+  },
+  "isolated_plan_check": {
+    "old": {
+      "minimum_wall_distance": 0.65,
+      "length": 4.648582310264051
+    },
+    "new": {
+      "minimum_wall_distance": 0.65,
+      "length": 4.939029234342499
+    },
+    "passed": true,
+    "domain": 168,
+    "robot_motion": false
+  },
+  "live": {
+    "pose": [
+      2.6845335302239812,
+      -5.6216972690265665,
+      0.0101939010340475
+    ],
+    "speed": 1.8425705888525323e-05,
+    "command": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "prediction": {
+      "source": "known_scene_routes",
+      "tracks": 2,
+      "frame": "odom"
+    },
+    "guard": {
+      "reason": "tracking_tf_pending",
+      "enabled": true,
+      "tracking_updates": 1402,
+      "prediction_checks": 540,
+      "tracking_stamp": 3207.341,
+      "tracking_tf_error": null,
+      "command_chain_healthy": false,
+      "stable_tracks": 0
+    },
+    "parameters": {
+      "controller_server": {
+        "FollowPath.max_speed_xy": 1.0,
+        "FollowPath.max_vel_x": 1.0,
+        "FollowPath.max_vel_y": 1.0,
+        "FollowPath.acc_lim_x": 0.7,
+        "FollowPath.acc_lim_y": 0.7,
+        "FollowPath.sim_time": 1.8,
+        "FollowPath.critics": [
+          "Oscillation",
+          "ObstacleFootprint",
+          "PredictiveObstacle",
+          "GoalDist",
+          "PathDist"
+        ],
+        "FollowPath.trajectory_generator_name": "bot_navigation::FineOmniTrajectoryGenerator",
+        "FollowPath.vx_samples": 11,
+        "FollowPath.vy_samples": 11
+      },
+      "velocity_smoother": {
+        "max_velocity": [
+          1.0,
+          1.0,
+          1.5
+        ],
+        "min_velocity": [
+          -1.0,
+          -1.0,
+          -1.5
+        ],
+        "max_accel": [
+          0.7,
+          0.7,
+          2.4
+        ],
+        "max_decel": [
+          -2.5,
+          -2.5,
+          -3.2
+        ]
+      },
+      "scan_velocity_guard": {
+        "max_linear_speed": 1.0,
+        "predictive_enabled": true,
+        "collision_footprint_radius": 0.325
+      },
+      "local_costmap/local_costmap": {
+        "width": 6,
+        "height": 6
+      },
+      "global_costmap/global_costmap": {
+        "plugins": [
+          "static_layer",
+          "obstacle_layer",
+          "inflation_layer",
+          "known_trajectory_layer"
+        ]
+      }
+    }
+  }
+}

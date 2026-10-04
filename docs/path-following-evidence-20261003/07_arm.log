@@ -1,0 +1,105 @@
+[INFO] [1791031211.558929615] [arm_grab_place_node]: 已初始化/arm_status发布器，用于发送抓取/放置确认
+[INFO] [1791031211.649547915] [arm_grab_place_node]: 机械臂动作服务就绪！
+[INFO] [1791031211.654584287] [arm_grab_place_node]: 夹爪动作服务就绪！
+[INFO] [1791031211.657786899] [arm_grab_place_node]: 吸附服务就绪！
+[INFO] [1791031211.658810004] [arm_grab_place_node]: 分离服务就绪！
+[INFO] [1791031276.022923115] [arm_grab_place_node]: 已更新目标物块：red_cube_4
+[INFO] [1791031291.875263455] [arm_grab_place_node]: 回转座对准 -3.069 rad，底盘保持朝向
+[INFO] [1791031296.690092845] [arm_grab_place_node]: ==================================================
+[INFO] [1791031296.690409849] [arm_grab_place_node]: 收到到达货物位置信号，准备抓取物块：red_cube_4
+[INFO] [1791031296.690660741] [arm_grab_place_node]: 步骤1：机械臂弯曲到抓取位置...
+[INFO] [1791031297.598352790] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791031297.649773273] [arm_grab_place_node]: 步骤2：夹爪闭合...
+[INFO] [1791031298.291177207] [arm_grab_place_node]: 夹爪动作执行完成！
+[INFO] [1791031298.291841451] [arm_grab_place_node]: 步骤3：执行物块吸附...
+[INFO] [1791031298.292212956] [arm_grab_place_node]: 执行吸附动作：机械臂 → 物块（red_cube_4）
+[INFO] [1791031298.321454676] [arm_grab_place_node]: 物块red_cube_4吸附成功！
+[INFO] [1791031298.372246336] [arm_grab_place_node]: 步骤4：机械臂举高（回到初始位置）...
+[INFO] [1791031299.449886127] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791031299.503539029] [arm_grab_place_node]: 抓取流程全部完成！已吸附物块：red_cube_4
+[INFO] [1791032267.274578592] [arm_grab_place_node]: 回转座对准 -1.057 rad，底盘保持朝向
+[INFO] [1791032272.673862860] [arm_grab_place_node]: 回转座对准 -0.936 rad，底盘保持朝向
+[INFO] [1791032277.074099736] [arm_grab_place_node]: 回转座对准 -0.813 rad，底盘保持朝向
+[INFO] [1791032280.074249767] [arm_grab_place_node]: 回转座对准 -0.686 rad，底盘保持朝向
+[INFO] [1791032282.074281596] [arm_grab_place_node]: 回转座对准 -0.557 rad，底盘保持朝向
+[INFO] [1791032609.875848805] [arm_grab_place_node]: 回转座对准 -0.404 rad，底盘保持朝向
+[INFO] [1791032610.673936749] [arm_grab_place_node]: 回转座对准 -0.262 rad，底盘保持朝向
+[INFO] [1791032610.708288273] [arm_grab_place_node]: ==================================================
+[INFO] [1791032610.709325832] [arm_grab_place_node]: 收到到达放置位置信号，准备分离物块：red_cube_4
+[INFO] [1791032610.710284334] [arm_grab_place_node]: 步骤1：机械臂弯曲到放置位置...
+[INFO] [1791032612.006806558] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032612.057793708] [arm_grab_place_node]: 步骤2：夹爪张开...
+[INFO] [1791032612.696382555] [arm_grab_place_node]: 夹爪动作执行完成！
+[INFO] [1791032612.696724949] [arm_grab_place_node]: 步骤3：执行物块分离...
+[INFO] [1791032612.696980433] [arm_grab_place_node]: 执行分离动作：机械臂 → 物块（red_cube_4）
+[INFO] [1791032612.745629926] [arm_grab_place_node]: 物块red_cube_4分离成功！
+[INFO] [1791032612.797242788] [arm_grab_place_node]: 步骤4：机械臂举高（回到初始位置）...
+[INFO] [1791032613.704356764] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032613.755967475] [arm_grab_place_node]: 放置流程全部完成！已分离物块：red_cube_4
+[INFO] [1791032614.635901480] [arm_grab_place_node]: 已更新目标物块：red_cube_3
+[INFO] [1791032650.474081125] [arm_grab_place_node]: 回转座对准 1.243 rad，底盘保持朝向
+[INFO] [1791032652.474248401] [arm_grab_place_node]: 回转座对准 2.233 rad，底盘保持朝向
+[INFO] [1791032653.874575041] [arm_grab_place_node]: 回转座对准 2.677 rad，底盘保持朝向
+[INFO] [1791032654.873960543] [arm_grab_place_node]: 回转座对准 2.804 rad，底盘保持朝向
+[INFO] [1791032655.425705233] [arm_grab_place_node]: ==================================================
+[INFO] [1791032655.426495305] [arm_grab_place_node]: 收到到达货物位置信号，准备抓取物块：red_cube_3
+[INFO] [1791032655.426873873] [arm_grab_place_node]: 步骤1：机械臂弯曲到抓取位置...
+[INFO] [1791032655.427538726] [arm_grab_place_node]: 回转座对准 2.885 rad，底盘保持朝向
+[INFO] [1791032656.706691106] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032656.757494870] [arm_grab_place_node]: 步骤2：夹爪闭合...
+[INFO] [1791032657.343373406] [arm_grab_place_node]: 夹爪动作执行完成！
+[INFO] [1791032657.343970520] [arm_grab_place_node]: 步骤3：执行物块吸附...
+[INFO] [1791032657.344479830] [arm_grab_place_node]: 执行吸附动作：机械臂 → 物块（red_cube_3）
+[INFO] [1791032657.352809746] [arm_grab_place_node]: 物块red_cube_3吸附成功！
+[INFO] [1791032657.403428489] [arm_grab_place_node]: 步骤4：机械臂举高（回到初始位置）...
+[INFO] [1791032658.255702719] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032658.306481123] [arm_grab_place_node]: 抓取流程全部完成！已吸附物块：red_cube_3
+[INFO] [1791032695.079997423] [arm_grab_place_node]: 回转座对准 -1.046 rad，底盘保持朝向
+[INFO] [1791032699.650129145] [arm_grab_place_node]: ==================================================
+[INFO] [1791032699.650676097] [arm_grab_place_node]: 收到到达放置位置信号，准备分离物块：red_cube_3
+[INFO] [1791032699.651178690] [arm_grab_place_node]: 步骤1：机械臂弯曲到放置位置...
+[INFO] [1791032700.113512727] [arm_grab_place_node]: 回转座对准 -0.267 rad，底盘保持朝向
+[INFO] [1791032702.083154011] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032702.133886263] [arm_grab_place_node]: 步骤2：夹爪张开...
+[INFO] [1791032702.722417932] [arm_grab_place_node]: 夹爪动作执行完成！
+[INFO] [1791032702.722747426] [arm_grab_place_node]: 步骤3：执行物块分离...
+[INFO] [1791032702.722989973] [arm_grab_place_node]: 执行分离动作：机械臂 → 物块（red_cube_3）
+[INFO] [1791032702.796139626] [arm_grab_place_node]: 物块red_cube_3分离成功！
+[INFO] [1791032702.848650782] [arm_grab_place_node]: 步骤4：机械臂举高（回到初始位置）...
+[INFO] [1791032703.754476155] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032703.805477316] [arm_grab_place_node]: 放置流程全部完成！已分离物块：red_cube_3
+[INFO] [1791032704.332825725] [arm_grab_place_node]: 已更新目标物块：red_cube_2
+[INFO] [1791032726.673984533] [arm_grab_place_node]: 回转座对准 -1.122 rad，底盘保持朝向
+[INFO] [1791032728.074833911] [arm_grab_place_node]: 回转座对准 -1.271 rad，底盘保持朝向
+[INFO] [1791032729.474849611] [arm_grab_place_node]: 回转座对准 -1.396 rad，底盘保持朝向
+[INFO] [1791032729.512319238] [arm_grab_place_node]: ==================================================
+[INFO] [1791032729.513019395] [arm_grab_place_node]: 收到到达货物位置信号，准备抓取物块：red_cube_2
+[INFO] [1791032729.513661803] [arm_grab_place_node]: 步骤1：机械臂弯曲到抓取位置...
+[INFO] [1791032730.859499045] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032730.910101856] [arm_grab_place_node]: 步骤2：夹爪闭合...
+[INFO] [1791032731.500536562] [arm_grab_place_node]: 夹爪动作执行完成！
+[INFO] [1791032731.500801453] [arm_grab_place_node]: 步骤3：执行物块吸附...
+[INFO] [1791032731.501005118] [arm_grab_place_node]: 执行吸附动作：机械臂 → 物块（red_cube_2）
+[INFO] [1791032731.508624247] [arm_grab_place_node]: 物块red_cube_2吸附成功！
+[INFO] [1791032731.561926271] [arm_grab_place_node]: 步骤4：机械臂举高（回到初始位置）...
+[INFO] [1791032732.417437979] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032732.469024953] [arm_grab_place_node]: 抓取流程全部完成！已吸附物块：red_cube_2
+[INFO] [1791032754.674320064] [arm_grab_place_node]: 回转座对准 -1.034 rad，底盘保持朝向
+[INFO] [1791032755.474402980] [arm_grab_place_node]: 回转座对准 -0.869 rad，底盘保持朝向
+[INFO] [1791032756.275030203] [arm_grab_place_node]: 回转座对准 -0.725 rad，底盘保持朝向
+[INFO] [1791032757.074763467] [arm_grab_place_node]: 回转座对准 -0.595 rad，底盘保持朝向
+[INFO] [1791032758.074737879] [arm_grab_place_node]: 回转座对准 -0.437 rad，底盘保持朝向
+[INFO] [1791032758.874083197] [arm_grab_place_node]: 回转座对准 -0.302 rad，底盘保持朝向
+[INFO] [1791032759.210091039] [arm_grab_place_node]: ==================================================
+[INFO] [1791032759.210401939] [arm_grab_place_node]: 收到到达放置位置信号，准备分离物块：red_cube_2
+[INFO] [1791032759.210640886] [arm_grab_place_node]: 步骤1：机械臂弯曲到放置位置...
+[INFO] [1791032759.408628102] [arm_grab_place_node]: 回转座对准 -0.258 rad，底盘保持朝向
+[INFO] [1791032760.789998530] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032760.840934780] [arm_grab_place_node]: 步骤2：夹爪张开...
+[INFO] [1791032761.479072541] [arm_grab_place_node]: 夹爪动作执行完成！
+[INFO] [1791032761.479349755] [arm_grab_place_node]: 步骤3：执行物块分离...
+[INFO] [1791032761.479566344] [arm_grab_place_node]: 执行分离动作：机械臂 → 物块（red_cube_2）
+[INFO] [1791032761.511561954] [arm_grab_place_node]: 物块red_cube_2分离成功！
+[INFO] [1791032761.562275214] [arm_grab_place_node]: 步骤4：机械臂举高（回到初始位置）...
+[INFO] [1791032762.413977376] [arm_grab_place_node]: 机械臂动作执行完成！
+[INFO] [1791032762.465423040] [arm_grab_place_node]: 放置流程全部完成！已分离物块：red_cube_2

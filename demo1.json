@@ -167,6 +167,9 @@
         "/local_plan": {
           "visible": true
         },
+        "/navigation/obstacle_predictions": {
+          "visible": true
+        },
         "/plan": {
           "visible": true,
           "lineWidth": 0.205,

@@ -1,0 +1,221 @@
+{
+  "tasks": [
+    {
+      "task": 1,
+      "command": "抓取1个蓝色去B",
+      "status": "success",
+      "seconds": 61.95449325799996,
+      "places": 1,
+      "sim_seconds": 40.60000000000001
+    },
+    {
+      "task": 2,
+      "command": "抓取1个红色去A",
+      "status": "success",
+      "seconds": 80.57576385199991,
+      "places": 1,
+      "sim_seconds": 53.19999999999999
+    },
+    {
+      "task": 3,
+      "command": "抓取1个蓝色去A",
+      "status": "success",
+      "seconds": 27.157316873000013,
+      "places": 1,
+      "sim_seconds": 17.0
+    }
+  ],
+  "alignment": [
+    {
+      "task": 1,
+      "event": "grasp_succeeded",
+      "wall_s": 35.508343846,
+      "chassis_yaw_deg": -0.004098337866112625,
+      "arm_yaw_deg": 96.1012307795537,
+      "direction_error_deg": 0.1206914312768559,
+      "base_xy": [
+        -3.632713195716776,
+        0.15492987403678588
+      ],
+      "target": {
+        "x": -3.703343,
+        "y": 0.829596,
+        "kind": "grab"
+      }
+    },
+    {
+      "task": 1,
+      "event": "place_succeeded",
+      "wall_s": 61.954415128999926,
+      "chassis_yaw_deg": -0.018163118313699038,
+      "arm_yaw_deg": -15.306023885001593,
+      "direction_error_deg": 0.0060212863209500814,
+      "base_xy": [
+        -1.7089507545581155,
+        -6.345029955594577
+      ],
+      "target": {
+        "x": -1.196544,
+        "y": -6.485499,
+        "kind": "place"
+      }
+    },
+    {
+      "task": 2,
+      "event": "grasp_succeeded",
+      "wall_s": 46.77979039799993,
+      "chassis_yaw_deg": -0.02269909304756779,
+      "arm_yaw_deg": -9.035872111111747,
+      "direction_error_deg": -0.5162928588573593,
+      "base_xy": [
+        8.948809862010505,
+        -3.609250656772813
+      ],
+      "target": {
+        "x": 9.604514,
+        "y": -3.707741,
+        "kind": "grab"
+      }
+    },
+    {
+      "task": 2,
+      "event": "place_succeeded",
+      "wall_s": 80.57566944999996,
+      "chassis_yaw_deg": -0.024761655708484816,
+      "arm_yaw_deg": -15.487923501997235,
+      "direction_error_deg": -0.42551096831633506,
+      "base_xy": [
+        2.646316195408381,
+        -5.593938511675942
+      ],
+      "target": {
+        "x": 3.1430860000000003,
+        "y": -5.727858,
+        "kind": "place"
+      }
+    },
+    {
+      "task": 3,
+      "event": "grasp_succeeded",
+      "wall_s": 16.33028894200004,
+      "chassis_yaw_deg": -0.02861613913532106,
+      "arm_yaw_deg": -8.860403986346544,
+      "direction_error_deg": 0.006186904508214364,
+      "base_xy": [
+        4.383357043871765,
+        -7.338245083697705
+      ],
+      "target": {
+        "x": 5.040937,
+        "y": -7.441163,
+        "kind": "grab"
+      }
+    },
+    {
+      "task": 3,
+      "event": "place_succeeded",
+      "wall_s": 27.157238570000004,
+      "chassis_yaw_deg": -0.028282590602076153,
+      "arm_yaw_deg": 13.21457950187581,
+      "direction_error_deg": -0.004998570774682502,
+      "base_xy": [
+        2.6906178463583985,
+        -5.833910928245667
+      ],
+      "target": {
+        "x": 3.1430860000000003,
+        "y": -5.727858,
+        "kind": "place"
+      }
+    }
+  ],
+  "placements": [
+    {
+      "model": "blue_cube_5",
+      "zone": "B",
+      "pose_xyz_rpy": [
+        -1.05505,
+        -6.52569,
+        0.749997,
+        0.0,
+        -5e-06,
+        -1.94467
+      ],
+      "cube_xy_fully_inside_0_8m_zone": true
+    },
+    {
+      "model": "red_cube_2",
+      "zone": "A",
+      "pose_xyz_rpy": [
+        3.2868,
+        -5.76551,
+        0.749998,
+        -0.0,
+        4e-06,
+        -0.112649
+      ],
+      "cube_xy_fully_inside_0_8m_zone": true
+    },
+    {
+      "model": "blue_cube_2",
+      "zone": "A",
+      "pose_xyz_rpy": [
+        3.33867,
+        -5.68216,
+        0.749999,
+        -3e-06,
+        1e-06,
+        0.385287
+      ],
+      "cube_xy_fully_inside_0_8m_zone": true
+    }
+  ],
+  "max_abs_chassis_yaw_deg": 0.02970884580994259,
+  "max_abs_commanded_chassis_yaw_rad_s": 0,
+  "peak_lateral_command_m_s": 0.7,
+  "manual_targets": [
+    {
+      "type": "custom",
+      "x": -3.703343,
+      "y": 0.27959599999999996,
+      "yaw": -0.00010805553449159833
+    },
+    {
+      "type": "custom",
+      "x": -1.8,
+      "y": -2.4,
+      "yaw": -7.021644169302714e-05
+    },
+    {
+      "type": "custom",
+      "x": -1.746544,
+      "y": -6.485499,
+      "yaw": -0.00013940273349756708
+    },
+    {
+      "type": "custom",
+      "x": 9.054514,
+      "y": -3.707741,
+      "yaw": -0.0003156180508226673
+    },
+    {
+      "type": "custom",
+      "x": 2.593086,
+      "y": -5.727858,
+      "yaw": -0.0003964081149960413
+    },
+    {
+      "type": "custom",
+      "x": 4.490937,
+      "y": -7.441163,
+      "yaw": -0.0004332784580662439
+    },
+    {
+      "type": "custom",
+      "x": 2.593086,
+      "y": -5.727858,
+      "yaw": -0.0005003532397321049
+    }
+  ],
+  "validation_limits": "One continuous three-task run; ideal planar drive and existing virtual attachment; wall times affected by simulation real-time factor; not hardware performance evidence."
+}

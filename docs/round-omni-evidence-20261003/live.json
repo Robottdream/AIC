@@ -1,0 +1,66 @@
+{
+  "/scan": {
+    "frame": "laser_link",
+    "samples": 1441,
+    "finite": 1424,
+    "nan": 17,
+    "sim_hz": 11.298870112988697
+  },
+  "joints": {
+    "joint2": -0.03760890305392106,
+    "joint3": 0.09580862936474421,
+    "joint1": -1.8327352413471942e-05,
+    "joint4": 8.44696327426675e-05,
+    "joint5": 0.3253425121465918,
+    "joint6": -6.893644938887888e-05,
+    "finger_joint1": 4.581095261847509e-08,
+    "front_left_wheel_joint": 0.001195679078411338,
+    "front_right_wheel_joint": -0.0001634729095618681,
+    "arm_yaw_joint": -1.8493592346402465e-07,
+    "rear_left_wheel_joint": 0.0009858357526741912,
+    "rear_right_wheel_joint": -0.0005339549177021397
+  },
+  "odom_z": -0.0010152232506622783,
+  "/scan_left_raw": {
+    "frame": "laser_left_link",
+    "samples": 1081,
+    "finite": 1072,
+    "nan": 0
+  },
+  "/scan_left": {
+    "frame": "laser_left_link",
+    "samples": 1081,
+    "finite": 1072,
+    "nan": 0,
+    "sim_hz": 9.998990001009995
+  },
+  "/scan_right": {
+    "frame": "laser_right_link",
+    "samples": 1081,
+    "finite": 1081,
+    "nan": 0,
+    "sim_hz": 10.000000000000002
+  },
+  "/scan_right_raw": {
+    "frame": "laser_right_link",
+    "samples": 1081,
+    "finite": 1081,
+    "nan": 0
+  },
+  "camera": {
+    "width": 1280,
+    "height": 720
+  },
+  "yaw_tests": [
+    {
+      "target": 0.35,
+      "actual": 0.35000000120825536,
+      "status": 4
+    },
+    {
+      "target": 0.0,
+      "actual": -1.8493592346402465e-07,
+      "status": 4
+    }
+  ]
+}

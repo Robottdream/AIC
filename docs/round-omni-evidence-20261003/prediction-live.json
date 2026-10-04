@@ -1,0 +1,62 @@
+{
+  "diagnostics": [
+    {
+      "reason": "tracking_tf_pending",
+      "enabled": true,
+      "tracking_updates": 573,
+      "prediction_checks": 47,
+      "tracking_stamp": 891.329,
+      "tracking_tf_error": null,
+      "command_chain_healthy": false,
+      "stable_tracks": 0
+    },
+    {
+      "reason": "tracking_tf_pending",
+      "enabled": true,
+      "tracking_updates": 578,
+      "prediction_checks": 47,
+      "tracking_stamp": 891.731,
+      "tracking_tf_error": null,
+      "command_chain_healthy": false,
+      "stable_tracks": 0
+    },
+    {
+      "reason": "tracking_tf_pending",
+      "enabled": true,
+      "tracking_updates": 584,
+      "prediction_checks": 47,
+      "tracking_stamp": 892.23,
+      "tracking_tf_error": null,
+      "command_chain_healthy": false,
+      "stable_tracks": 0
+    }
+  ],
+  "clusters": {
+    "/scan": {
+      "groups": 4,
+      "max_span_m": 1.1257726504895205,
+      "finite_ranges": 1423
+    },
+    "/scan_left": {
+      "groups": 2,
+      "max_span_m": 1.1558576216598797,
+      "finite_ranges": 1081
+    },
+    "/scan_right": {
+      "groups": 2,
+      "max_span_m": 1.105875874505527,
+      "finite_ranges": 1081
+    }
+  },
+  "tf_checks": {
+    "success": 93,
+    "errors": [
+      "Could not find a connection between 'odom' and 'laser_link' because they are not part of the same tree.Tf has two or more unconnected trees.",
+      "Lookup would require extrapolation into the future.  Requested time 882.230000 but the latest data is at time 882.216000, when looking up transform from frame [laser_link] to frame [odom]",
+      "Lookup would require extrapolation into the future.  Requested time 882.330000 but the latest data is at time 882.318000, when looking up transform from frame [laser_link] to frame [odom]",
+      "Lookup would require extrapolation into the future.  Requested time 882.630000 but the latest data is at time 882.624000, when looking up transform from frame [laser_link] to frame [odom]"
+    ]
+  },
+  "predictive_enabled": true,
+  "diagnostic_samples": 23
+}

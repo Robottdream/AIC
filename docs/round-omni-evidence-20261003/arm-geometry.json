@@ -1,0 +1,15 @@
+{
+  "sampled_poses": 7373,
+  "sensor_AABB_overlaps": [],
+  "overlap_count": 0,
+  "loaded_sensor_overlap_count": 0,
+  "minimum_arm_z_m": 0.11898262005357917,
+  "lifted_arm_AABB_radius_m": 0.1,
+  "lifted_loaded_AABB_radius_m": 0.5905640243529744,
+  "bend_link6_origin_m": [
+    0.3529815789380127,
+    0.0,
+    0.19657503757966777
+  ],
+  "method": "Analytic primitive AABBs; 101 bend fractions x 73 pedestal angles; 3cm cube at pickup distances 0.40/0.55/0.70m, z=0.75, preserved attachment transform"
+}

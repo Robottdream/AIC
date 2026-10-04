@@ -1,0 +1,318 @@
+{
+  "base_link": [
+    {
+      "file": "base_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "base_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 2896
+    },
+    {
+      "file": "base_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 9608
+    },
+    {
+      "file": "base_link_front_identification.stl",
+      "rgba": [
+        0.949999988079071,
+        0.33000001311302185,
+        0.06499999761581421,
+        1.0
+      ],
+      "triangles": 1448
+    },
+    {
+      "file": "base_link_optical_window.stl",
+      "rgba": [
+        0.05999999865889549,
+        0.25,
+        0.3199999928474426,
+        1.0
+      ],
+      "triangles": 2040
+    }
+  ],
+  "front_left_wheel_link": [
+    {
+      "file": "front_left_wheel_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "front_left_wheel_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "front_left_wheel_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 5280
+    },
+    {
+      "file": "front_left_wheel_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 6120
+    }
+  ],
+  "front_right_wheel_link": [
+    {
+      "file": "front_right_wheel_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "front_right_wheel_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "front_right_wheel_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 5280
+    },
+    {
+      "file": "front_right_wheel_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 6120
+    }
+  ],
+  "rear_left_wheel_link": [
+    {
+      "file": "rear_left_wheel_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "rear_left_wheel_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "rear_left_wheel_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 5280
+    },
+    {
+      "file": "rear_left_wheel_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 6120
+    }
+  ],
+  "rear_right_wheel_link": [
+    {
+      "file": "rear_right_wheel_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "rear_right_wheel_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "rear_right_wheel_link_dark_rubber.stl",
+      "rgba": [
+        0.02500000037252903,
+        0.029999999329447746,
+        0.03500000014901161,
+        1.0
+      ],
+      "triangles": 5280
+    },
+    {
+      "file": "rear_right_wheel_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 6120
+    }
+  ],
+  "arm_yaw_link": [
+    {
+      "file": "arm_yaw_link_blue_gray_chassis.stl",
+      "rgba": [
+        0.07500000298023224,
+        0.18000000715255737,
+        0.27000001072883606,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "arm_yaw_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1020
+    },
+    {
+      "file": "arm_yaw_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 8160
+    }
+  ],
+  "laser_left_link": [
+    {
+      "file": "laser_left_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1448
+    },
+    {
+      "file": "laser_left_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 3060
+    },
+    {
+      "file": "laser_left_link_optical_window.stl",
+      "rgba": [
+        0.05999999865889549,
+        0.25,
+        0.3199999928474426,
+        1.0
+      ],
+      "triangles": 1020
+    }
+  ],
+  "laser_right_link": [
+    {
+      "file": "laser_right_link_light_alloy.stl",
+      "rgba": [
+        0.6499999761581421,
+        0.7200000286102295,
+        0.7599999904632568,
+        1.0
+      ],
+      "triangles": 1448
+    },
+    {
+      "file": "laser_right_link_sensor_housing.stl",
+      "rgba": [
+        0.054999999701976776,
+        0.07000000029802322,
+        0.08500000089406967,
+        1.0
+      ],
+      "triangles": 3060
+    },
+    {
+      "file": "laser_right_link_optical_window.stl",
+      "rgba": [
+        0.05999999865889549,
+        0.25,
+        0.3199999928474426,
+        1.0
+      ],
+      "triangles": 1020
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+[
+  {
+    "task": 1,
+    "command": "抓取1个蓝色去B",
+    "status": "success",
+    "seconds": 77.37515896700006,
+    "places": 1,
+    "sim_seconds": 64.3
+  },
+  {
+    "task": 2,
+    "command": "抓取1个红色去A",
+    "status": "stalled_test_stopped",
+    "seconds": 206.9261320239998,
+    "places": 0,
+    "sim_seconds": 172.5,
+    "reason": "Sustained zero command near B exit after repeated recoveries; stopped by test operator, not a 300 s timeout",
+    "last_pose": [
+      -2.067248400799768,
+      -3.101197182858382,
+      -0.23615117990221465
+    ],
+    "recoveries": 9
+  }
+]

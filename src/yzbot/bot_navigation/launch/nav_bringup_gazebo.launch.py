@@ -46,6 +46,9 @@ def generate_launch_description():
     odom_map_default = os.environ.get('AIC_ODOM_MAP', 'false').lower()
     odom_map_enabled = odom_map_default in ('1', 'true', 'yes')
     default_params = 'originbot_nav2_odom.yaml' if odom_map_enabled else 'originbot_nav2.yaml'
+    mecanum = os.environ.get('AIC_ROBOT_MODEL', 'legacy') == 'mecanum'
+    if mecanum:
+        default_params = default_params.replace('.yaml', '_mecanum.yaml')
     nav2_param_path = LaunchConfiguration('params_file', default=os.path.join(navigation2_dir, 'param', default_params))
     # Use separate executors and DDS participants for Nav2 on this WSL host.
     # Keep composition opt-in for controlled comparisons on other ROS/DDS setups.
@@ -86,11 +89,16 @@ def generate_launch_description():
             ),
             Node(package='bot_navigation', executable='scan_velocity_guard.py',
                  name='scan_velocity_guard', output='screen',
-                 parameters=[{'use_sim_time': use_sim_time,
-                              'predictive_enabled': os.environ.get('AIC_DYNAMIC_GUARD', '0') == '1'}]),
+                 parameters=[nav2_param_path, {'use_sim_time': use_sim_time,
+                              'predictive_enabled': os.environ.get('AIC_DYNAMIC_GUARD', '1' if mecanum else '0') == '1',
+                              'publish_lidar_forecasts': not mecanum}]),
+            Node(condition=IfCondition('true' if mecanum else 'false'),
+                 package='bot_navigation', executable='known_obstacle_forecaster.py',
+                 name='known_obstacle_forecaster', output='screen',
+                 parameters=[{'use_sim_time': use_sim_time}]),
             Node(package='nav2_collision_monitor', executable='collision_monitor',
                  name='collision_monitor', output='screen',
-                 parameters=[os.path.join(navigation2_dir, 'param', 'collision_monitor.yaml'),
+                 parameters=[os.path.join(navigation2_dir, 'param', 'collision_monitor_mecanum.yaml' if os.environ.get('AIC_ROBOT_MODEL', 'legacy') == 'mecanum' else 'collision_monitor.yaml'),
                              {'use_sim_time': use_sim_time}]),
             Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
                  name='lifecycle_manager_collision', output='screen',

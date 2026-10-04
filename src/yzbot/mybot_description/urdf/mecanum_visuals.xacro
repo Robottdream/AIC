@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:macro name="mecanum_visual" params="link">
+<xacro:if value="${link == 'base_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/base_link_blue_gray_chassis.stl"/></geometry><material name="mecanum_base_link_0"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/base_link_light_alloy.stl"/></geometry><material name="mecanum_base_link_1"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/base_link_sensor_housing.stl"/></geometry><material name="mecanum_base_link_2"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/base_link_front_identification.stl"/></geometry><material name="mecanum_base_link_3"><color rgba="0.949999988079071 0.33000001311302185 0.06499999761581421 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/base_link_optical_window.stl"/></geometry><material name="mecanum_base_link_4"><color rgba="0.05999999865889549 0.25 0.3199999928474426 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'front_left_wheel_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_left_wheel_link_light_alloy.stl"/></geometry><material name="mecanum_front_left_wheel_link_0"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_left_wheel_link_blue_gray_chassis.stl"/></geometry><material name="mecanum_front_left_wheel_link_1"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_left_wheel_link_dark_rubber.stl"/></geometry><material name="mecanum_front_left_wheel_link_2"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_left_wheel_link_sensor_housing.stl"/></geometry><material name="mecanum_front_left_wheel_link_3"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'front_right_wheel_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_right_wheel_link_light_alloy.stl"/></geometry><material name="mecanum_front_right_wheel_link_0"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_right_wheel_link_blue_gray_chassis.stl"/></geometry><material name="mecanum_front_right_wheel_link_1"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_right_wheel_link_dark_rubber.stl"/></geometry><material name="mecanum_front_right_wheel_link_2"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/front_right_wheel_link_sensor_housing.stl"/></geometry><material name="mecanum_front_right_wheel_link_3"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'rear_left_wheel_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_left_wheel_link_light_alloy.stl"/></geometry><material name="mecanum_rear_left_wheel_link_0"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_left_wheel_link_blue_gray_chassis.stl"/></geometry><material name="mecanum_rear_left_wheel_link_1"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_left_wheel_link_dark_rubber.stl"/></geometry><material name="mecanum_rear_left_wheel_link_2"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_left_wheel_link_sensor_housing.stl"/></geometry><material name="mecanum_rear_left_wheel_link_3"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'rear_right_wheel_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_right_wheel_link_light_alloy.stl"/></geometry><material name="mecanum_rear_right_wheel_link_0"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_right_wheel_link_blue_gray_chassis.stl"/></geometry><material name="mecanum_rear_right_wheel_link_1"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_right_wheel_link_dark_rubber.stl"/></geometry><material name="mecanum_rear_right_wheel_link_2"><color rgba="0.02500000037252903 0.029999999329447746 0.03500000014901161 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/rear_right_wheel_link_sensor_housing.stl"/></geometry><material name="mecanum_rear_right_wheel_link_3"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'arm_yaw_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/arm_yaw_link_blue_gray_chassis.stl"/></geometry><material name="mecanum_arm_yaw_link_0"><color rgba="0.07500000298023224 0.18000000715255737 0.27000001072883606 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/arm_yaw_link_light_alloy.stl"/></geometry><material name="mecanum_arm_yaw_link_1"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/arm_yaw_link_sensor_housing.stl"/></geometry><material name="mecanum_arm_yaw_link_2"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'laser_left_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/laser_left_link_light_alloy.stl"/></geometry><material name="mecanum_laser_left_link_0"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/laser_left_link_sensor_housing.stl"/></geometry><material name="mecanum_laser_left_link_1"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/laser_left_link_optical_window.stl"/></geometry><material name="mecanum_laser_left_link_2"><color rgba="0.05999999865889549 0.25 0.3199999928474426 1.0"/></material></visual>
+</xacro:if>
+<xacro:if value="${link == 'laser_right_link'}">
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/laser_right_link_light_alloy.stl"/></geometry><material name="mecanum_laser_right_link_0"><color rgba="0.6499999761581421 0.7200000286102295 0.7599999904632568 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/laser_right_link_sensor_housing.stl"/></geometry><material name="mecanum_laser_right_link_1"><color rgba="0.054999999701976776 0.07000000029802322 0.08500000089406967 1.0"/></material></visual>
+<visual><geometry><mesh filename="package://mybot_description/meshes/mecanum/laser_right_link_optical_window.stl"/></geometry><material name="mecanum_laser_right_link_2"><color rgba="0.05999999865889549 0.25 0.3199999928474426 1.0"/></material></visual>
+</xacro:if>
+</xacro:macro>
+</robot>

@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<robot name="six_arm"
+    xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:include filename="$(find mybot_description)/urdf/mecanum_with_arm_gazebo.xacro" />
+    <xacro:include filename="$(find mybot_description)/urdf/rgbd_gazebo.xacro" />
+    <xacro:include filename="$(find mybot_description)/urdf/camera_gazebo.xacro" />
+    <xacro:include filename="$(find mybot_description)/urdf/lidar_gazebo.xacro" />
+    <xacro:include filename="$(find mybot_description)/urdf/imu_gazebo.xacro" />
+
+    <!-- rgbd -->
+    <xacro:property name="rgbd_offset_x" value="0.06" />
+    <xacro:property name="rgbd_offset_y" value="0" />
+    <xacro:property name="rgbd_offset_z" value="-0.03" />
+
+    <joint name="rgbd_joint" type="fixed">
+        <origin xyz="${-rgbd_offset_x} ${rgbd_offset_y} ${rgbd_offset_z}" rpy="0 ${-M_PI/2} 0" />
+        <parent link="grasping_frame" />
+        <child link="camera_rgbd_link" />
+    </joint>
+
+    <xacro:rgbd_camera prefix="camera_rgbd" />
+
+    <!-- Camera -->
+    <xacro:property name="camera_offset_x" value="0.155" />
+    <xacro:property name="camera_offset_y" value="0" />
+    <xacro:property name="camera_offset_z" value="0.08" />
+
+    <joint name="camera_joint" type="fixed">
+        <origin xyz="${camera_offset_x} ${camera_offset_y} ${camera_offset_z}" rpy="0 0 0" />
+        <parent link="base_link" />
+        <child link="camera_link" />
+    </joint>
+
+    <xacro:mipi_camera prefix="camera" show_visual="false" />
+
+
+    <!-- Virtual origin for compatibility /scan only. Costmaps use real frames. -->
+    <joint name="lidar_joint" type="fixed"><origin xyz="0 0 0.084"/><parent link="base_link"/><child link="laser_link"/></joint>
+    <link name="laser_link"/>
+    <joint name="left_lidar_joint" type="fixed"><origin xyz="0 0.225 0.084" rpy="0 0 ${M_PI/2}"/><parent link="base_link"/><child link="laser_left_link"/></joint>
+    <xacro:lidar prefix="laser_left" topic="scan_left_raw" range_min="0.05" show_visual="false" samples="811" update_rate="8" min_angle="${-3*M_PI/4}" max_angle="${3*M_PI/4}"/>
+    <joint name="right_lidar_joint" type="fixed"><origin xyz="0 -0.225 0.084" rpy="0 0 ${-M_PI/2}"/><parent link="base_link"/><child link="laser_right_link"/></joint>
+    <xacro:lidar prefix="laser_right" topic="scan_right_raw" range_min="0.05" show_visual="false" samples="811" update_rate="8" min_angle="${-3*M_PI/4}" max_angle="${3*M_PI/4}"/>
+    <gazebo reference="laser_left_link"><preserveFixedJoint>true</preserveFixedJoint></gazebo>
+    <gazebo reference="laser_right_link"><preserveFixedJoint>true</preserveFixedJoint></gazebo>
+    <!-- IMU -->
+    <xacro:imu_sensor parent_link="base_link" />
+
+
+</robot>

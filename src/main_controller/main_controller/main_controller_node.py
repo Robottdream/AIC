@@ -32,14 +32,14 @@ class MainControllerNode(Node):
     def __init__(self):
         super().__init__("main_controller_node")
         self.set_parameters([Parameter("use_sim_time", value=True)])
-        
+
         # QoS配置
         self.qos_best_effort = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
-        
+
         # 预设位置参数
         self.RED_BLOCKS = [
             (7.632928, 5.523903, False),
@@ -60,9 +60,11 @@ class MainControllerNode(Node):
             "B": (-1.746544, -6.485499),
             "C": (-7.423777, -7.785160)
         }
-        
+
         # 核心变量
         self.current_robot_pose = (0.0, 0.0)
+        self.current_robot_yaw = 0.0
+        self.arm_alignment = os.environ.get('AIC_ARM_ALIGNMENT', '0') == '1'
         self.plan_client = ActionClient(self, ComputePathToPose, "/compute_path_to_pose")
         self.selection_id = 0
         self.failed_blocks_for_step = set()
@@ -90,11 +92,11 @@ class MainControllerNode(Node):
         self.closest_cache = None
         self.cache_expire = 2.0
         self.last_cache_time = 0.0
-        
+
         # 超时设置
         self.GRASP_TIMEOUT = 8.0
         self.PLACE_TIMEOUT = 8.0
-        
+
         # 订阅器
         # Candidate start positions must use the same localization source as
         # Nav2. With identity map->odom, unused AMCL estimates may drift.
@@ -114,9 +116,10 @@ class MainControllerNode(Node):
         self.arm_status_sub = self.create_subscription(
             String, "/arm_status", self._arm_status_callback, 10
         )
-        
+
         # 发布器
         self.target_cube_pub = self.create_publisher(String, "/current_target_cube", 10)
+        self.arm_target_pub = self.create_publisher(String, "/arm_world_target", 10)
         self.nav_target_pub = self.create_publisher(String, "/manual_nav_target", 10)
         self.arm_cargo_pub = self.create_publisher(String, "/nav_done_cargo", 10)
         self.arm_area_pub = self.create_publisher(String, "/nav_done_area", 10)
@@ -126,23 +129,23 @@ class MainControllerNode(Node):
             "pick": self.create_publisher(Int32, "/pick", 10),
             "cur": self.create_publisher(Int32, "/cur", 10)
         }
-        
+
         # 新增发布器：目标区域和抓取数量
         self.target_area_pub = self.create_publisher(Int32, "/target_area", 10)
         self.number_pick_pub = self.create_publisher(Int32, "/number_pick", 10)
-        
+
         self.get_logger().info("主控节点（支持智能路径规划）启动成功")
-        
+
         # 初始化状态
         self._update_foxglove()
         # 初始状态：空闲
         self.target_area_pub.publish(Int32(data=9))
         self.number_pick_pub.publish(Int32(data=0))
-    
+
     # 计算两点之间的距离
     def calculate_distance(self, point1, point2):
         return math.hypot(point1[0] - point2[0], point1[1] - point2[1])
-    
+
     # 生成抓取偏移位置
     def get_grasp_position(self, block_pos):
         return self.get_grasp_candidates(block_pos)[0][:2]
@@ -157,7 +160,7 @@ class MainControllerNode(Node):
             (x + d, y, math.pi),
             (x, y + d, -math.pi / 2),
         ]
-    
+
     # 获取符合条件的物块列表
     def get_available_blocks(self, color):
         blocks = self.RED_BLOCKS if color == "red" else self.BLUE_BLOCKS
@@ -166,7 +169,7 @@ class MainControllerNode(Node):
             if not is_grasped:
                 available.append((x, y, i))
         return available
-    
+
     def _pose_stamped(self, x, y, yaw=0.0):
         pose = PoseStamped()
         pose.header.frame_id = "map"
@@ -364,57 +367,57 @@ class MainControllerNode(Node):
     def assign_best_block_to_task(self, task, used_blocks=None, current_pos=None):
         if used_blocks is None:
             used_blocks = set()
-            
+
         if current_pos is None:
             current_pos = self.current_robot_pose
         color = task["color"]
         target_area = task["to"]
         area_pos = self.AREA_COORDS[target_area]
-        
+
         best_block = None
         min_cost = float("inf")
-        
+
         # 获取所有可用物块
         available_blocks = self.get_available_blocks(color)
-        
+
         for block_pos in available_blocks:
             block_x, block_y, block_idx = block_pos
             if (color, block_idx) in used_blocks:
                 continue
-                
+
             # 计算抓取位置
             grasp_pos = self.get_grasp_position((block_x, block_y))
-            
+
             # 计算成本（距离）
             # 从当前位置到抓取位置的距离
             distance = self.calculate_distance(current_pos, grasp_pos)
             # 从抓取位置到目标区域的距离
             distance += self.calculate_distance(grasp_pos, area_pos)
-            
+
             if distance < min_cost:
                 min_cost = distance
                 best_block = block_pos
-        
+
         return best_block, min_cost
-    
+
     # 计算任务序列的总成本
     def calculate_task_sequence_cost(self, tasks):
         total_cost = 0.0
         current_pos = self.current_robot_pose
         used_blocks = set()
-        
+
         # 首先为每个任务分配最佳物块
         task_assignments = []
         for task in tasks:
             best_block, cost = self.assign_best_block_to_task(task, used_blocks, current_pos)
             if not best_block:
                 return float("inf"), None  # 无法完成所有任务
-            
+
             block_x, block_y, block_idx = best_block
             target_area = task["to"]
             area_pos = self.AREA_COORDS[target_area]
             grasp_pos = self.get_grasp_position((block_x, block_y))
-            
+
             task_assignments.append({
                 "task": task,
                 "block_pos": (block_x, block_y),
@@ -422,13 +425,13 @@ class MainControllerNode(Node):
                 "grasp_pos": grasp_pos,
                 "area_pos": area_pos
             })
-            
+
             used_blocks.add((task["color"], block_idx))
             total_cost += cost
             current_pos = area_pos
-        
+
         return total_cost, task_assignments
-    
+
     # 优化多任务执行顺序
     def optimize_task_order(self, tasks):
         """保留出题顺序；具体物块在每一步开始时按实时路径确定。"""
@@ -455,28 +458,28 @@ class MainControllerNode(Node):
         """为同一任务中的多个物块生成优化的抓取顺序"""
         if remaining_count <= 0:
             return []
-            
+
         self.get_logger().info(f"正在为任务优化{remaining_count}个物块的抓取顺序...")
-        
+
         # 获取所有可用物块
         color = task["color"]
         available_blocks = self.get_available_blocks(color)
-        
+
         if len(available_blocks) < remaining_count:
             self.get_logger().warn(f"可用物块数量不足，需要{remaining_count}个，实际只有{len(available_blocks)}个")
             remaining_count = len(available_blocks)
-        
+
         # 生成所有可能的物块组合和顺序
         min_total_cost = float("inf")
         best_sequence = None
-        
+
         # 从可用物块中选择remaining_count个
         from itertools import combinations
-        
+
         # 为了避免计算量过大，限制最大组合数
         max_combinations = 1000
         combo_count = 0
-        
+
         for block_combination in combinations(available_blocks, remaining_count):
             combo_count += 1
             if combo_count > max_combinations:
@@ -484,45 +487,45 @@ class MainControllerNode(Node):
                 # 使用贪心算法
                 best_sequence = self._greedy_multi_block_selection(task, remaining_count)
                 break
-                
+
             # 尝试所有排列顺序
             for block_order in permutations(block_combination):
                 # 计算这个顺序的总成本
                 total_cost = 0.0
                 current_pos = self.current_robot_pose
                 valid = True
-                
+
                 for block_pos in block_order:
                     block_x, block_y, block_idx = block_pos
                     grasp_pos = self.get_grasp_position((block_x, block_y))
                     area_pos = self.AREA_COORDS[task["to"]]
-                    
+
                     # 计算成本
                     cost = self.calculate_distance(current_pos, grasp_pos) + \
                            self.calculate_distance(grasp_pos, area_pos)
-                    
+
                     if cost == float("inf"):
                         valid = False
                         break
-                        
+
                     total_cost += cost
                     current_pos = area_pos  # 下一个任务从目标区域开始
-                
+
                 if valid and total_cost < min_total_cost:
                     min_total_cost = total_cost
                     best_sequence = block_order
-        
+
         if best_sequence is None:
             # 如果没有找到最佳序列，使用贪心算法
             best_sequence = self._greedy_multi_block_selection(task, remaining_count)
-        
+
         # 转换为任务分配格式
         assignments = []
         for block_pos in best_sequence:
             block_x, block_y, block_idx = block_pos
             area_pos = self.AREA_COORDS[task["to"]]
             grasp_pos = self.get_grasp_position((block_x, block_y))
-            
+
             assignments.append({
                 "task": task,
                 "block_pos": (block_x, block_y),
@@ -531,57 +534,59 @@ class MainControllerNode(Node):
                 "area_pos": area_pos,
                 "multi_block": True  # 标记为多物块任务的一部分
             })
-        
+
         self.get_logger().info(f"多物块优化完成，最佳路径总距离：{min_total_cost:.2f}米")
         return assignments
-    
+
     # 贪心算法选择多物块顺序
     def _greedy_multi_block_selection(self, task, remaining_count):
         """贪心算法：每次选择当前最优的物块"""
         selected_blocks = []
         used_blocks = set()
         current_pos = self.current_robot_pose
-        
+
         for _ in range(remaining_count):
             best_block = None
             min_cost = float("inf")
-            
+
             # 获取所有可用物块
             color = task["color"]
             available_blocks = self.get_available_blocks(color)
-            
+
             for block_pos in available_blocks:
                 block_x, block_y, block_idx = block_pos
                 if (color, block_idx) in used_blocks:
                     continue
-                    
+
                 # 计算抓取位置
                 grasp_pos = self.get_grasp_position((block_x, block_y))
                 area_pos = self.AREA_COORDS[task["to"]]
-                
+
                 # 计算成本
                 cost = self.calculate_distance(current_pos, grasp_pos) + \
                        self.calculate_distance(grasp_pos, area_pos)
-                
+
                 if cost < min_cost:
                     min_cost = cost
                     best_block = block_pos
-            
+
             if best_block:
                 selected_blocks.append(best_block)
                 used_blocks.add(best_block[2])
                 current_pos = self.AREA_COORDS[task["to"]]  # 下一个从目标区域开始
             else:
                 break
-        
+
         return selected_blocks
-    
+
     # AMCL定位回调
     @staticmethod
     def _amcl_callback_impl(self_ref, msg):
         self = self_ref()
         if not self:
             return
+        q=msg.pose.pose.orientation
+        self.current_robot_yaw=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))
         new_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y)
         if abs(new_pose[0] - self.current_robot_pose[0]) > 0.01 or \
            abs(new_pose[1] - self.current_robot_pose[1]) > 0.01:
@@ -589,12 +594,12 @@ class MainControllerNode(Node):
                 self.get_logger().info(f"初始定位：({new_pose[0]:.2f}, {new_pose[1]:.2f})")
             self.current_robot_pose = new_pose
             self.closest_cache = None
-    
+
     def _amcl_callback(self, msg):
         self_ref = weakref.ref(self)
         self._amcl_callback_impl(self_ref, msg)
         del self_ref
-    
+
     # 聊天指令回调（接收任务）
     @staticmethod
     def _chat_callback_impl(self_ref, msg):
@@ -606,7 +611,7 @@ class MainControllerNode(Node):
             # 支持单个任务对象或任务列表
             if not isinstance(task_json, list):
                 task_json = [task_json]
-            
+
             # 验证任务格式并添加到队列
             valid_tasks = []
             for task in task_json:
@@ -621,30 +626,30 @@ class MainControllerNode(Node):
             if valid_tasks:
                 self.task_queue.extend(valid_tasks)
                 self.get_logger().info(f"接收{len(valid_tasks)}个任务，队列长度：{len(self.task_queue)}")
-                
+
                 # 发布抓取数量（有命令时显示1）
                 self.number_pick_pub.publish(Int32(data=1))
-                
+
                 # 如果当前没有正在执行的任务，立即优化并开始处理
                 if self.current_task is None and self.current_step == "WAIT_TASK":
                     self._optimize_and_process_tasks()
         except json.JSONDecodeError:
             self.get_logger().error("任务解析失败（非JSON格式）")
-    
+
     def _chat_callback(self, msg):
         self_ref = weakref.ref(self)
         self._chat_callback_impl(self_ref, msg)
         del self_ref
-    
+
     # 优化并处理任务
     def _optimize_and_process_tasks(self):
         if not self.task_queue:
             return
-        
+
         # 复制当前任务队列并清空
         current_tasks = self.task_queue.copy()
         self.task_queue = []
-        
+
         # 展开多数量任务为单个任务
         expanded_tasks = []
         for task in current_tasks:
@@ -659,10 +664,10 @@ class MainControllerNode(Node):
                     expanded_tasks.append(subtask)
             else:
                 expanded_tasks.append(task)
-        
+
         # 优化任务执行顺序
         self.optimized_tasks = self.optimize_task_order(expanded_tasks)
-        
+
         if not self.optimized_tasks:
             self.get_logger().error("任务优化失败，无法生成执行计划")
             # 没有任务时发布抓取数量为0
@@ -670,12 +675,12 @@ class MainControllerNode(Node):
             # 发布目标区域为空闲（9）
             self.target_area_pub.publish(Int32(data=9))
             return
-        
+
         self.get_logger().info(f"任务优化完成，共生成{len(self.optimized_tasks)}个执行步骤")
-        
+
         # 处理第一个优化任务
         self._process_next_optimized_task()
-    
+
     # 处理下一个优化后的任务
     def _process_next_optimized_task(self):
         if not self.optimized_tasks:
@@ -688,13 +693,13 @@ class MainControllerNode(Node):
             self.target_area_pub.publish(Int32(data=9))
             self._update_foxglove()
             return
-        
+
         # 取出第一个优化任务
         self.current_assignment = self.optimized_tasks.pop(0)
         self.current_task = self.current_assignment["task"]
         self.completed_num = 0
         self.current_step = "NAV_TO_BLOCK"
-        
+
         self.selected_block = None
         # 重置状态变量
         self.grasp_confirmed = False
@@ -710,19 +715,19 @@ class MainControllerNode(Node):
         self.block_nav_target_index = 0
         self.closest_cache = None
         self._clean_timers()
-        
+
         color = self.current_task["color"]
         original_num = self.current_task.get("original_num", 1)
         current_index = self.current_task.get("current_index", 1)
-        
+
         self.get_logger().info(
             f"开始执行优化任务：{current_index}/{original_num} 个{color}物块 → {self.current_task['to']}区"
         )
-        
+
         # 根据area_pos确定目标区域编号
         area_pos = self.current_assignment["area_pos"]
         area_code = 9  # 默认空闲
-        
+
         # 比较坐标来确定是哪个区域
         for area_name, coords in self.AREA_COORDS.items():
             if abs(area_pos[0] - coords[0]) < 0.1 and abs(area_pos[1] - coords[1]) < 0.1:
@@ -733,14 +738,14 @@ class MainControllerNode(Node):
                 elif area_name == "C":
                     area_code = 2
                 break
-        
+
         # 发布目标区域
         self.target_area_pub.publish(Int32(data=area_code))
-        
+
         # 立即更新状态，确保颜色在任务开始时就显示
         self._update_foxglove()
         self._select_reachable_block()
-    
+
     # 导航状态回调
     @staticmethod
     def _nav_status_callback_impl(self_ref, msg):
@@ -807,12 +812,12 @@ class MainControllerNode(Node):
         self.number_pick_pub.publish(Int32(data=0))
         self.target_area_pub.publish(Int32(data=9))
         self._update_foxglove()
-    
+
     def _nav_status_callback(self, msg):
         self_ref = weakref.ref(self)
         self._nav_status_callback_impl(self_ref, msg)
         del self_ref
-    
+
     # 机械臂状态回调
     @staticmethod
     def _arm_status_callback_impl(self_ref, msg):
@@ -834,12 +839,12 @@ class MainControllerNode(Node):
         elif status == "place_failed" and self.current_step == "PLACE":
             self.get_logger().warn("机械臂放置失败，立即重试")
             self._check_place(self_ref)
-    
+
     def _arm_status_callback(self, msg):
         self_ref = weakref.ref(self)
         self._arm_status_callback_impl(self_ref, msg)
         del self_ref
-    
+
     # 导航到物块（使用优化路径）
     def _block_ingress_waypoint(self, cube_name):
         # The direct route from the southeast to red_cube_3's east side can
@@ -855,7 +860,7 @@ class MainControllerNode(Node):
     def _send_current_block_target(self):
         target = self.block_nav_targets[self.block_nav_target_index]
         nav_msg = String()
-        nav_msg.data = json.dumps({"type": "custom", "x": target[0], "y": target[1], "yaw": target[2]})
+        nav_msg.data = json.dumps({"type": "custom", "x": target[0], "y": target[1], "yaw": self.current_robot_yaw if self.arm_alignment else target[2]})
         self.nav_target_pub.publish(nav_msg)
         self.get_logger().info(
             f"导航到物块途经点 {self.block_nav_target_index + 1}/{len(self.block_nav_targets)}："
@@ -877,12 +882,15 @@ class MainControllerNode(Node):
         waypoint = self._block_ingress_waypoint(cube_name)
         self.block_nav_targets = ([waypoint] if waypoint else []) + [grasp_pos]
         self.block_nav_target_index = 0
+        if self.arm_alignment:
+            x,y=self.current_assignment["block_pos"][:2]
+            self.arm_target_pub.publish(String(data=json.dumps({"x":x,"y":y,"kind":"grab"})))
         self._send_current_block_target()
         self.target_cube_pub.publish(String(data=cube_name))
         self.current_step = "NAV_TO_BLOCK"
         self._update_foxglove()
         self.get_logger().info(f"导航到物块：{cube_name}（抓取位置：{grasp_pos[0]:.2f}, {grasp_pos[1]:.2f}）")
-    
+
     # 触发抓取
     def trigger_grasp(self):
         if self.current_grasp_retry >= self.max_grasp_retry:
@@ -895,7 +903,7 @@ class MainControllerNode(Node):
         self_ref = weakref.ref(self)
         self.grasp_timer = self.create_timer(self.GRASP_TIMEOUT, lambda: self._check_grasp(self_ref))
         self.arm_cargo_pub.publish(String(data="arrived_at_cargo"))
-    
+
     # 检查抓取结果
     @staticmethod
     def _check_grasp(self_ref):
@@ -922,7 +930,7 @@ class MainControllerNode(Node):
             self.current_grasp_retry += 1
             self.get_logger().warn(f"抓取超时/失败，准备重试（{self.current_grasp_retry}/{self.max_grasp_retry}）")
             self.trigger_grasp()
-    
+
     # 导航到目标区域
     def navigate_to_area(self):
         self._clean_timers()
@@ -937,6 +945,8 @@ class MainControllerNode(Node):
             self.area_nav_targets.insert(0, waypoint)
         self.area_nav_target_index = 0
         self.current_area_nav_retry = 0
+        if self.arm_alignment:
+            self.arm_target_pub.publish(String(data=json.dumps({"x":area_pos[0]+self.GRASP_OFFSET,"y":area_pos[1],"kind":"place"})))
         self._send_current_area_target()
 
     def _send_current_area_target(self):
@@ -944,7 +954,7 @@ class MainControllerNode(Node):
             return
         x, y, yaw = self.area_nav_targets[self.area_nav_target_index]
         nav_msg = String()
-        nav_msg.data = json.dumps({"type": "custom", "x": x, "y": y, "yaw": yaw})
+        nav_msg.data = json.dumps({"type": "custom", "x": x, "y": y, "yaw": self.current_robot_yaw if self.arm_alignment else yaw})
         self.nav_target_pub.publish(nav_msg)
         self.current_step = "NAV_TO_AREA"
         self._update_foxglove()
@@ -962,11 +972,11 @@ class MainControllerNode(Node):
         self_ref = weakref.ref(self)
         self.place_timer = self.create_timer(self.PLACE_TIMEOUT, lambda: self._check_place(self_ref))
         self.arm_area_pub.publish(String(data="arrived_at_area"))
-        
+
         # 发布状态4：正在放置
         self.foxglove_pubs["cur"].publish(Int32(data=4))
-        
-    
+
+
     # 检查放置结果
     @staticmethod
     def _check_place(self_ref):
@@ -982,17 +992,17 @@ class MainControllerNode(Node):
             self.completed_num += 1
             original_num = self.current_task.get("original_num", 1)
             current_index = self.current_task.get("current_index", 1)
-            
+
             self.get_logger().info(f"放置完成（{current_index}/{original_num}）")
-            
+
             # 直接处理下一个优化任务
             self._process_next_optimized_task()
         else:
             # 重试放置
             self.get_logger().warn("放置超时/失败，准备重试")
             self.trigger_place()
-        
-    
+
+
     # 清理定时器
     def _clean_timers(self):
         if self.retry_timer:
@@ -1007,7 +1017,7 @@ class MainControllerNode(Node):
             self.place_timer.cancel()
             self.place_timer.destroy()
             self.place_timer = None
-    
+
     # 更新Foxglove状态
     def _update_foxglove(self):
         """更新Foxglove显示的状态信息"""
@@ -1020,11 +1030,11 @@ class MainControllerNode(Node):
             "NAV_TO_AREA": 3,    # 导航到区域
             "PLACE": 4           # 放置中
         }
-        
+
         # 发布当前状态
         status = step_to_status.get(self.current_step, 0)
         self.foxglove_pubs["cur"].publish(Int32(data=status))
-        
+
         # 根据任务设置颜色信息
         if self.current_task:
             color = self.current_task["color"]
@@ -1032,7 +1042,7 @@ class MainControllerNode(Node):
             color_code = 0 if color == "blue" else 1
             self.foxglove_pubs["color"].publish(Int32(data=color_code))
             self.foxglove_pubs["ask"].publish(Int32(data=color_code))  # ask与color完全相同
-            
+
             # 根据当前步骤设置pick状态
             if self.current_step in ["WAIT_TASK", "SELECT_BLOCK", "NAV_TO_BLOCK"]:
                 pick_code = -1
@@ -1049,7 +1059,7 @@ class MainControllerNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    
+
     try:
         node = MainControllerNode()
         rclpy.spin(node)

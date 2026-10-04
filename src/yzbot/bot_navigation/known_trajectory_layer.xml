@@ -1,0 +1,5 @@
+<library path="aic_predictive_critic">
+  <class type="bot_navigation::KnownTrajectoryLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>Add soft global planning costs along the known scene obstacle forecast.</description>
+  </class>
+</library>

@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="laser">
 
     <xacro:macro name="lidar"
-        params="prefix:=laser gz_visualize:=false range_min:=0.10 range_max:=30.0 topic:=scan show_visual:=true">
+        params="prefix:=laser gz_visualize:=false range_min:=0.10 range_max:=30.0 topic:=scan show_visual:=true samples:=1441 update_rate:=10 min_angle:=-3.14159 max_angle:=3.14159">
         <!-- Create laser reference frame -->
         <link name="${prefix}_link">
             <inertial>
@@ -11,6 +11,11 @@
                 <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01" />
             </inertial>
 
+            <xacro:if value="${prefix == 'laser_left' or prefix == 'laser_right'}">
+            <xacro:mecanum_visual link="${prefix}_link"/>
+            <collision name="mecanum_scanner_housing"><geometry><cylinder radius="0.0355" length="0.034"/></geometry></collision>
+            <collision name="mecanum_scanner_bracket"><origin xyz="-0.025 0 -0.025"/><geometry><box size="0.12 0.086 0.008"/></geometry></collision>
+            </xacro:if>
             <xacro:if value="${show_visual}"><visual>
                 <origin xyz=" 0 0 0 " rpy="0 0 0" />
                 <geometry>
@@ -35,18 +40,18 @@
 
         <gazebo reference="${prefix}_link">
             <sensor type="ray" name="${prefix}_lidar">
-                <update_rate>10</update_rate>
+                <update_rate>${update_rate}</update_rate>
                 <visualize>${gz_visualize}</visualize>
                 <ray>
                     <scan>
                         <horizontal>
-                            <!-- 0.25 degree rays: at 7 m their 3.1 cm spacing
-                                 stays below the 5 cm costmap cell size. -->
-                            <samples>1441</samples>
+                            <!-- Defaults use 0.25 degree rays. The round dual
+                                 lidar model uses 0.333 degree rays (4.1 cm at 7 m). -->
+                            <samples>${samples}</samples>
                             <!-- One returned range per ray: interpolation creates phantom edge hits. -->
                             <resolution>1</resolution>
-                            <min_angle>-3.14159</min_angle>
-                            <max_angle>3.14159</max_angle>
+                            <min_angle>${min_angle}</min_angle>
+                            <max_angle>${max_angle}</max_angle>
                         </horizontal>
                     </scan>
                     <range>

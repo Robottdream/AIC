@@ -1,0 +1,11 @@
+<library path="aic_predictive_critic">
+  <class type="bot_navigation::PathFollowCritic" base_class_type="dwb_core::TrajectoryCritic">
+    <description>Ordered lookahead and whole-trajectory path deviation with a corner-cutting prefix bound.</description>
+  </class>
+  <class type="bot_navigation::PredictiveObstacleCritic" base_class_type="dwb_core::TrajectoryCritic">
+    <description>Score each DWB trajectory against timestamped obstacle motion forecasts.</description>
+  </class>
+  <class type="bot_navigation::FineOmniTrajectoryGenerator" base_class_type="dwb_core::TrajectoryGenerator">
+    <description>Full-range omni sampling with additional 0.025 m/s samples near zero.</description>
+  </class>
+</library>

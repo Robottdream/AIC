@@ -1,0 +1,148 @@
+{
+  "tasks": [
+    {
+      "command": "抓取1个蓝色去B",
+      "old": {
+        "task": 1,
+        "command": "抓取1个蓝色去B",
+        "status": "success",
+        "seconds": 50.12515430299982,
+        "places": 1,
+        "sim_seconds": 41.20000000000002
+      },
+      "new": {
+        "task": 1,
+        "command": "抓取1个蓝色去B",
+        "status": "success",
+        "seconds": 77.37515896700006,
+        "places": 1,
+        "sim_seconds": 64.3
+      },
+      "wall_time_reduction_percent": -54.36393172832472
+    },
+    {
+      "command": "抓取1个红色去A",
+      "old": {
+        "task": 2,
+        "command": "抓取1个红色去A",
+        "status": "success",
+        "seconds": 81.46914725200031,
+        "places": 1,
+        "sim_seconds": 64.80000000000001
+      },
+      "new": {
+        "task": 2,
+        "command": "抓取1个红色去A",
+        "status": "stalled_test_stopped",
+        "seconds": 206.9261320239998,
+        "places": 0,
+        "sim_seconds": 172.5,
+        "reason": "Sustained zero command near B exit after repeated recoveries; stopped by test operator, not a 300 s timeout",
+        "last_pose": [
+          -2.067248400799768,
+          -3.101197182858382,
+          -0.23615117990221465
+        ],
+        "recoveries": 9
+      },
+      "wall_time_reduction_percent": null
+    },
+    {
+      "command": "抓取1个蓝色去A",
+      "old": {
+        "task": 3,
+        "command": "抓取1个蓝色去A",
+        "status": "success",
+        "seconds": 26.250495991000207,
+        "places": 1,
+        "sim_seconds": 22.799999999999983
+      },
+      "new": null,
+      "wall_time_reduction_percent": null
+    }
+  ],
+  "routes_excluding_warmup": {
+    "旧车型": {
+      "completed": 12,
+      "attempted": 12,
+      "kinds": {
+        "lateral": {
+          "n": 2,
+          "wall_mean_s": 8.272055293499989,
+          "sim_mean_s": 7.299999999999997
+        },
+        "return_lateral": {
+          "n": 2,
+          "wall_mean_s": 10.847892229500076,
+          "sim_mean_s": 7.499999999999993
+        },
+        "forward": {
+          "n": 2,
+          "wall_mean_s": 3.526779572500118,
+          "sim_mean_s": 3.1499999999999986
+        },
+        "return_forward": {
+          "n": 2,
+          "wall_mean_s": 11.593893879999996,
+          "sim_mean_s": 10.049999999999997
+        }
+      }
+    },
+    "新车型 V3": {
+      "completed": 12,
+      "attempted": 12,
+      "kinds": {
+        "lateral": {
+          "n": 2,
+          "wall_mean_s": 6.08707098900004,
+          "sim_mean_s": 4.799999999999997
+        },
+        "return_lateral": {
+          "n": 2,
+          "wall_mean_s": 4.962024773499934,
+          "sim_mean_s": 4.399999999999999
+        },
+        "forward": {
+          "n": 2,
+          "wall_mean_s": 5.257304677500315,
+          "sim_mean_s": 4.6499999999999915
+        },
+        "return_forward": {
+          "n": 2,
+          "wall_mean_s": 5.0323073554998246,
+          "sim_mean_s": 4.549999999999997
+        }
+      }
+    }
+  },
+  "new_route_peak_command_norm_mps": 0.5563792502192889,
+  "model": "Gazebo ideal planar velocity model, not roller traction physics",
+  "baseline_first_attempt": [
+    {
+      "task": 1,
+      "command": "抓取1个蓝色去B",
+      "status": "timeout",
+      "seconds": 300.0045580430001,
+      "places": 0,
+      "sim_seconds": 254.70000000000002
+    }
+  ],
+  "new_v2_tasks": [
+    {
+      "task": 1,
+      "command": "抓取1个蓝色去B",
+      "status": "success",
+      "seconds": 71.35028346499985,
+      "places": 1,
+      "sim_seconds": 65.29999999999998
+    },
+    {
+      "task": 2,
+      "command": "抓取1个红色去A",
+      "status": "timeout",
+      "seconds": 300.00872890699975,
+      "places": 0,
+      "sim_seconds": 251.79999999999998
+    }
+  ]
+}

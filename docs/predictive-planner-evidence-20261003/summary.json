@@ -1,0 +1,120 @@
+{
+  "global": {
+    "baseline": {
+      "max_y": 0.0,
+      "length": 4.0
+    },
+    "predicted": {
+      "max_y": 1.4504341125488283,
+      "length": 5.054695752388794
+    },
+    "cleared": {
+      "max_y": 0.0,
+      "length": 4.0
+    },
+    "passed": true,
+    "domain": 165,
+    "robot_motion": false
+  },
+  "local": {
+    "baseline": [
+      0.7000000000000001,
+      0.0,
+      -0.0
+    ],
+    "crossing": [
+      0.14000000000000004,
+      0.0,
+      -0.0
+    ],
+    "approaching": [
+      -0.13999999999999993,
+      0.0,
+      -0.0
+    ],
+    "stale": [
+      0.7000000000000001,
+      0.0,
+      -0.0
+    ],
+    "known_linear": [
+      0.14000000000000004,
+      0.0,
+      -0.0
+    ],
+    "known_turn": [
+      -0.13999999999999993,
+      0.0,
+      -0.0
+    ],
+    "crossing_rejected": 17,
+    "isolated_domain": 164,
+    "robot_motion": false,
+    "passed": true
+  },
+  "live": {
+    "parameters": {
+      "/controller_server": {
+        "FollowPath.critics": [
+          "Oscillation",
+          "ObstacleFootprint",
+          "PredictiveObstacle",
+          "GoalDist",
+          "PathDist"
+        ],
+        "FollowPath.PredictiveObstacle.class": "bot_navigation::PredictiveObstacleCritic",
+        "FollowPath.PredictiveObstacle.scale": 12.0,
+        "FollowPath.sim_time": 1.8,
+        "FollowPath.discretize_by_time": true,
+        "FollowPath.time_granularity": 0.05
+      },
+      "/scan_velocity_guard": {
+        "predictive_enabled": true,
+        "publish_lidar_forecasts": false
+      },
+      "/global_costmap/global_costmap": {
+        "plugins": [
+          "static_layer",
+          "obstacle_layer",
+          "inflation_layer",
+          "known_trajectory_layer"
+        ],
+        "known_trajectory_layer.plugin": "bot_navigation::KnownTrajectoryLayer",
+        "known_trajectory_layer.enabled": true
+      }
+    },
+    "forecast_messages": 115,
+    "max_tracks": 2,
+    "marker_messages": 115,
+    "prediction_markers": 2,
+    "planner_samples": 0
+  },
+  "live_tracks": [
+    {
+      "id": 2,
+      "name": "obstacle2",
+      "center": [
+        -8.04675698226592,
+        -4.022275288491093
+      ],
+      "velocity": [
+        0.2801834119646692,
+        0.05744187479749631
+      ],
+      "radius": 0.5303300858899106
+    },
+    {
+      "id": 3,
+      "name": "obstacle3",
+      "center": [
+        -2.4999999079358832,
+        0.037215414219781716
+      ],
+      "velocity": [
+        0.0,
+        0.29390169094135987
+      ],
+      "radius": 0.5303300858899106
+    }
+  ]
+}

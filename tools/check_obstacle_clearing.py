@@ -62,7 +62,7 @@ def trial(node, enabled, folder, beams=361):
             future = client.call_async(req)
             deadline = time.monotonic()+15
             while not future.done() and time.monotonic() < deadline:
-                rclpy.spin_once(node, timeout_sec=.1)
+                rclpy.spin_once(node, timeout_sec=1/float(os.environ.get('AIC_CLEARING_RATE', '10')))
             print('transition', transition, future.result(), flush=True)
             assert future.result() and future.result().success
 
@@ -116,7 +116,7 @@ def trial(node, enabled, folder, beams=361):
         scan_for(3, False, sweep=True)
         trail_after = scan_for(2, False)
         assert trail_after['remaining_obstacle'] == 100, 'Real obstacle erased after sweep'
-        if enabled and beams == 1441:
+        if enabled and beams >= 1081:
             assert trail_after['corridor_lethal_cells'] == 0, 'Dense rays left a trail'
         return {'inf_is_valid': enabled, 'beams': beams, 'before': before,
                 'after': after, 'trail_after': trail_after, 'pass': True}
@@ -136,7 +136,7 @@ def trial(node, enabled, folder, beams=361):
 
 
 def main():
-    folder = Path(__file__).resolve().parents[1]/'log/ghost-obstacles-20260930'
+    folder = Path(os.environ.get('AIC_CLEARING_OUT', str(Path(__file__).resolve().parents[1]/'log/ghost-obstacles-20260930')))
     folder.mkdir(parents=True, exist_ok=True)
     if len(sys.argv) == 1:
         for flag in ('false', 'true', 'dense'):
@@ -151,7 +151,8 @@ def main():
     rclpy.init()
     node = rclpy.create_node('ghost_obstacle_test')
     try:
-        report = trial(node, enabled, folder, 1441 if sys.argv[1] == 'dense' else 361)
+        report = trial(node, enabled, folder, int(os.environ.get('AIC_CLEARING_BEAMS', '1441' if sys.argv[1] == 'dense' else '361')))
+        report['rate_hz'] = float(os.environ.get('AIC_CLEARING_RATE', '10'))
         (folder/(sys.argv[1]+'.json')).write_text(json.dumps(report, indent=2)+'\n')
     finally:
         node.destroy_node()

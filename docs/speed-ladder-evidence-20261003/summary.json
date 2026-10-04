@@ -1,0 +1,983 @@
+{
+  "raw_evidence": "/home/polarbear/aic_speed_ladder_20261003",
+  "runs": [
+    {
+      "limit": 1,
+      "passed": true,
+      "wall_seconds": 128.67456203800248,
+      "sim_seconds": 63.39999999999998,
+      "peak_speed": 1.000000052876021,
+      "recoveries": 0,
+      "min_clearance": 0.6465379398017547,
+      "max_deviation": 0.13036882870008326,
+      "parameters": {
+        "controller_server": {
+          "FollowPath.max_speed_xy": 1.0,
+          "FollowPath.PathFollow.lookahead_distance": 0.65,
+          "FollowPath.PathFollow.max_path_chord_deviation": 0.0,
+          "FollowPath.sim_time": 1.8,
+          "FollowPath.forward_prune_distance": 2.6
+        },
+        "velocity_smoother": {
+          "max_velocity": [
+            1.0,
+            1.0,
+            1.5
+          ],
+          "max_accel": [
+            0.7,
+            0.7,
+            2.4
+          ],
+          "max_decel": [
+            -2.5,
+            -2.5,
+            -3.2
+          ]
+        },
+        "scan_velocity_guard": {
+          "max_linear_speed": 1.0,
+          "predictive_enabled": true,
+          "prediction_horizon": 1.8
+        },
+        "collision_monitor": {
+          "NearStop.points": [
+            0.405,
+            0.0,
+            0.3912,
+            0.10482,
+            0.35074,
+            0.2025,
+            0.28638,
+            0.28638,
+            0.2025,
+            0.35074,
+            0.10482,
+            0.3912,
+            0.0,
+            0.405,
+            -0.10482,
+            0.3912,
+            -0.2025,
+            0.35074,
+            -0.28638,
+            0.28638,
+            -0.35074,
+            0.2025,
+            -0.3912,
+            0.10482,
+            -0.405,
+            0.0,
+            -0.3912,
+            -0.10482,
+            -0.35074,
+            -0.2025,
+            -0.28638,
+            -0.28638,
+            -0.2025,
+            -0.35074,
+            -0.10482,
+            -0.3912,
+            -0.0,
+            -0.405,
+            0.10482,
+            -0.3912,
+            0.2025,
+            -0.35074,
+            0.28638,
+            -0.28638,
+            0.35074,
+            -0.2025,
+            0.3912,
+            -0.10482
+          ],
+          "FootprintApproach.time_before_collision": 2.0
+        },
+        "local_costmap/local_costmap": {
+          "width": 6,
+          "height": 6
+        }
+      },
+      "legs": [
+        {
+          "leg": "long_corridor",
+          "status": 4,
+          "wall_seconds": 50.97885594000036,
+          "sim_seconds": 22.099999999999966,
+          "planned_length": 16.5827569481041,
+          "peak_speed": 1.0000000088801362,
+          "recoveries": 0,
+          "min_clearance": 0.9887657801257534,
+          "max_deviation": 0.11157677178230804
+        },
+        {
+          "leg": "enter_A",
+          "status": 4,
+          "wall_seconds": 26.650617713999964,
+          "sim_seconds": 12.800000000000011,
+          "planned_length": 7.42719597722427,
+          "peak_speed": 1.000000037799193,
+          "recoveries": 0,
+          "min_clearance": 0.6658827040288855,
+          "max_deviation": 0.10895616537992525
+        },
+        {
+          "leg": "exit_A_return",
+          "status": 4,
+          "wall_seconds": 51.045088384002156,
+          "sim_seconds": 28.5,
+          "planned_length": 20.411425088685082,
+          "peak_speed": 1.000000052876021,
+          "recoveries": 0,
+          "min_clearance": 0.6465379398017547,
+          "max_deviation": 0.13036882870008326
+        }
+      ]
+    },
+    {
+      "limit": 2,
+      "passed": true,
+      "wall_seconds": 108.01120090300174,
+      "sim_seconds": 57.30000000000001,
+      "peak_speed": 2.0000000733489607,
+      "recoveries": 0,
+      "min_clearance": 0.6141790597562399,
+      "max_deviation": 0.14746302954770993,
+      "parameters": {
+        "controller_server": {
+          "FollowPath.max_speed_xy": 2.0,
+          "FollowPath.PathFollow.lookahead_distance": 1.3,
+          "FollowPath.PathFollow.max_path_chord_deviation": 0.06,
+          "FollowPath.sim_time": 1.8,
+          "FollowPath.forward_prune_distance": 4.4
+        },
+        "velocity_smoother": {
+          "max_velocity": [
+            2.0,
+            2.0,
+            1.5
+          ],
+          "max_accel": [
+            0.7,
+            0.7,
+            2.4
+          ],
+          "max_decel": [
+            -2.5,
+            -2.5,
+            -3.2
+          ]
+        },
+        "scan_velocity_guard": {
+          "max_linear_speed": 2.0,
+          "predictive_enabled": true,
+          "prediction_horizon": 1.8
+        },
+        "collision_monitor": {
+          "NearStop.points": [
+            0.405,
+            0.0,
+            0.3912,
+            0.10482,
+            0.35074,
+            0.2025,
+            0.28638,
+            0.28638,
+            0.2025,
+            0.35074,
+            0.10482,
+            0.3912,
+            0.0,
+            0.405,
+            -0.10482,
+            0.3912,
+            -0.2025,
+            0.35074,
+            -0.28638,
+            0.28638,
+            -0.35074,
+            0.2025,
+            -0.3912,
+            0.10482,
+            -0.405,
+            0.0,
+            -0.3912,
+            -0.10482,
+            -0.35074,
+            -0.2025,
+            -0.28638,
+            -0.28638,
+            -0.2025,
+            -0.35074,
+            -0.10482,
+            -0.3912,
+            -0.0,
+            -0.405,
+            0.10482,
+            -0.3912,
+            0.2025,
+            -0.35074,
+            0.28638,
+            -0.28638,
+            0.35074,
+            -0.2025,
+            0.3912,
+            -0.10482
+          ],
+          "FootprintApproach.time_before_collision": 2.0
+        },
+        "local_costmap/local_costmap": {
+          "width": 10,
+          "height": 10
+        }
+      },
+      "legs": [
+        {
+          "leg": "long_corridor",
+          "status": 4,
+          "wall_seconds": 40.81029281600058,
+          "sim_seconds": 22.400000000000034,
+          "planned_length": 15.903342880064622,
+          "peak_speed": 2.0000000733489607,
+          "recoveries": 0,
+          "min_clearance": 0.9626134953948724,
+          "max_deviation": 0.14746302954770993
+        },
+        {
+          "leg": "enter_A",
+          "status": 4,
+          "wall_seconds": 25.30980307899881,
+          "sim_seconds": 13.399999999999977,
+          "planned_length": 7.422121646211845,
+          "peak_speed": 1.168632338735789,
+          "recoveries": 0,
+          "min_clearance": 0.6141790597562399,
+          "max_deviation": 0.09765663430606333
+        },
+        {
+          "leg": "exit_A_return",
+          "status": 4,
+          "wall_seconds": 41.89110500800234,
+          "sim_seconds": 21.5,
+          "planned_length": 20.40645194419225,
+          "peak_speed": 1.9900000982658355,
+          "recoveries": 0,
+          "min_clearance": 0.6374963469191,
+          "max_deviation": 0.11159483244465769
+        }
+      ]
+    },
+    {
+      "limit": 3,
+      "passed": true,
+      "wall_seconds": 112.09203938500286,
+      "sim_seconds": 57.499999999999886,
+      "peak_speed": 2.6774639502219526,
+      "recoveries": 0,
+      "min_clearance": 0.41254387348818394,
+      "max_deviation": 0.13160716699141511,
+      "parameters": {
+        "controller_server": {
+          "FollowPath.max_speed_xy": 3.0,
+          "FollowPath.PathFollow.lookahead_distance": 1.9500000000000002,
+          "FollowPath.PathFollow.max_path_chord_deviation": 0.06,
+          "FollowPath.sim_time": 1.8,
+          "FollowPath.forward_prune_distance": 6.2
+        },
+        "velocity_smoother": {
+          "max_velocity": [
+            3.0,
+            3.0,
+            1.5
+          ],
+          "max_accel": [
+            0.7,
+            0.7,
+            2.4
+          ],
+          "max_decel": [
+            -2.5,
+            -2.5,
+            -3.2
+          ]
+        },
+        "scan_velocity_guard": {
+          "max_linear_speed": 3.0,
+          "predictive_enabled": true,
+          "prediction_horizon": 1.8
+        },
+        "collision_monitor": {
+          "NearStop.points": [
+            0.405,
+            0.0,
+            0.3912,
+            0.10482,
+            0.35074,
+            0.2025,
+            0.28638,
+            0.28638,
+            0.2025,
+            0.35074,
+            0.10482,
+            0.3912,
+            0.0,
+            0.405,
+            -0.10482,
+            0.3912,
+            -0.2025,
+            0.35074,
+            -0.28638,
+            0.28638,
+            -0.35074,
+            0.2025,
+            -0.3912,
+            0.10482,
+            -0.405,
+            0.0,
+            -0.3912,
+            -0.10482,
+            -0.35074,
+            -0.2025,
+            -0.28638,
+            -0.28638,
+            -0.2025,
+            -0.35074,
+            -0.10482,
+            -0.3912,
+            -0.0,
+            -0.405,
+            0.10482,
+            -0.3912,
+            0.2025,
+            -0.35074,
+            0.28638,
+            -0.28638,
+            0.35074,
+            -0.2025,
+            0.3912,
+            -0.10482
+          ],
+          "FootprintApproach.time_before_collision": 2.0
+        },
+        "local_costmap/local_costmap": {
+          "width": 14,
+          "height": 14
+        }
+      },
+      "legs": [
+        {
+          "leg": "long_corridor",
+          "status": 4,
+          "wall_seconds": 38.48094542000035,
+          "sim_seconds": 20.899999999999977,
+          "planned_length": 16.192277067396958,
+          "peak_speed": 2.369286185853928,
+          "recoveries": 0,
+          "min_clearance": 0.9720803033678179,
+          "max_deviation": 0.12622153389023885
+        },
+        {
+          "leg": "enter_A",
+          "status": 4,
+          "wall_seconds": 29.991490357002476,
+          "sim_seconds": 13.899999999999977,
+          "planned_length": 7.420606103198696,
+          "peak_speed": 1.446602924609858,
+          "recoveries": 0,
+          "min_clearance": 0.41254387348818394,
+          "max_deviation": 0.08311445367537826
+        },
+        {
+          "leg": "exit_A_return",
+          "status": 4,
+          "wall_seconds": 43.619603608000034,
+          "sim_seconds": 22.699999999999932,
+          "planned_length": 20.43255013766501,
+          "peak_speed": 2.6774639502219526,
+          "recoveries": 0,
+          "min_clearance": 0.6168838438829805,
+          "max_deviation": 0.13160716699141511
+        }
+      ]
+    },
+    {
+      "limit": 4,
+      "passed": true,
+      "wall_seconds": 142.76654275699912,
+      "sim_seconds": 74.29999999999995,
+      "peak_speed": 2.3603902059604063,
+      "recoveries": 0,
+      "min_clearance": 0.5153331348988563,
+      "max_deviation": 0.23311545232678152,
+      "parameters": {
+        "controller_server": {
+          "FollowPath.max_speed_xy": 4.0,
+          "FollowPath.PathFollow.lookahead_distance": 2.6,
+          "FollowPath.PathFollow.max_path_chord_deviation": 0.06,
+          "FollowPath.sim_time": 2.2,
+          "FollowPath.forward_prune_distance": 9.600000000000001
+        },
+        "velocity_smoother": {
+          "max_velocity": [
+            4.0,
+            4.0,
+            1.5
+          ],
+          "max_accel": [
+            0.7,
+            0.7,
+            2.4
+          ],
+          "max_decel": [
+            -2.5,
+            -2.5,
+            -3.2
+          ]
+        },
+        "scan_velocity_guard": {
+          "max_linear_speed": 4.0,
+          "predictive_enabled": true,
+          "prediction_horizon": 2.2
+        },
+        "collision_monitor": {
+          "NearStop.points": [
+            0.405,
+            0.0,
+            0.3912,
+            0.10482,
+            0.35074,
+            0.2025,
+            0.28638,
+            0.28638,
+            0.2025,
+            0.35074,
+            0.10482,
+            0.3912,
+            0.0,
+            0.405,
+            -0.10482,
+            0.3912,
+            -0.2025,
+            0.35074,
+            -0.28638,
+            0.28638,
+            -0.35074,
+            0.2025,
+            -0.3912,
+            0.10482,
+            -0.405,
+            0.0,
+            -0.3912,
+            -0.10482,
+            -0.35074,
+            -0.2025,
+            -0.28638,
+            -0.28638,
+            -0.2025,
+            -0.35074,
+            -0.10482,
+            -0.3912,
+            -0.0,
+            -0.405,
+            0.10482,
+            -0.3912,
+            0.2025,
+            -0.35074,
+            0.28638,
+            -0.28638,
+            0.35074,
+            -0.2025,
+            0.3912,
+            -0.10482
+          ],
+          "FootprintApproach.time_before_collision": 2.0
+        },
+        "local_costmap/local_costmap": {
+          "width": 20,
+          "height": 20
+        }
+      },
+      "legs": [
+        {
+          "leg": "long_corridor",
+          "status": 4,
+          "wall_seconds": 53.54397743699883,
+          "sim_seconds": 26.799999999999955,
+          "planned_length": 16.579812822564445,
+          "peak_speed": 2.2578347952127555,
+          "recoveries": 0,
+          "min_clearance": 0.9608869109490067,
+          "max_deviation": 0.1108625744804113
+        },
+        {
+          "leg": "enter_A",
+          "status": 4,
+          "wall_seconds": 31.882066199999826,
+          "sim_seconds": 16.399999999999977,
+          "planned_length": 7.420606103198696,
+          "peak_speed": 1.5557185403453557,
+          "recoveries": 0,
+          "min_clearance": 0.6066943888972433,
+          "max_deviation": 0.08345376929092134
+        },
+        {
+          "leg": "exit_A_return",
+          "status": 4,
+          "wall_seconds": 57.34049912000046,
+          "sim_seconds": 31.100000000000023,
+          "planned_length": 20.480988360063346,
+          "peak_speed": 2.3603902059604063,
+          "recoveries": 0,
+          "min_clearance": 0.5153331348988563,
+          "max_deviation": 0.23311545232678152
+        }
+      ]
+    }
+  ],
+  "lidar": {
+    "scan": {
+      "points": 1441,
+      "simulation_hz": 8.842105263157896,
+      "wall_hz": 5.282854675473172,
+      "max_wall_interval": 0.26253393800288904,
+      "max_sim_interval": 0.12599999999974898,
+      "span_degrees": 360.00001001791264
+    },
+    "scan_left_raw": {
+      "points": 811,
+      "simulation_hz": 8.0,
+      "wall_hz": 4.780046863567034,
+      "max_wall_interval": 0.2708509780022723,
+      "max_sim_interval": 0.12599999999974898,
+      "span_degrees": 269.99948158886843
+    },
+    "scan_left": {
+      "points": 811,
+      "simulation_hz": 8.0,
+      "wall_hz": 4.779519303545059,
+      "max_wall_interval": 0.27491208799983724,
+      "max_sim_interval": 0.12599999999974898,
+      "span_degrees": 269.99948158886843
+    },
+    "scan_right_raw": {
+      "points": 811,
+      "simulation_hz": 8.0,
+      "wall_hz": 4.77961138135419,
+      "max_wall_interval": 0.26912784700107295,
+      "max_sim_interval": 0.1269999999999527,
+      "span_degrees": 269.99948158886843
+    },
+    "scan_right": {
+      "points": 811,
+      "simulation_hz": 8.0,
+      "wall_hz": 4.779971991513229,
+      "max_wall_interval": 0.27309036500082584,
+      "max_sim_interval": 0.1269999999999527,
+      "span_degrees": 269.99948158886843
+    },
+    "real_time_factor": 0.5975995207161935,
+    "max_clock_wall_interval": 0.22463811399939004,
+    "continuous_wall_freshness": true,
+    "passed": true
+  },
+  "clearing": {
+    "inf_is_valid": true,
+    "beams": 1081,
+    "before": {
+      "old_obstacle": 100,
+      "remaining_obstacle": 100,
+      "corridor_lethal_cells": 0
+    },
+    "after": {
+      "old_obstacle": 0,
+      "remaining_obstacle": 100,
+      "corridor_lethal_cells": 0
+    },
+    "trail_after": {
+      "old_obstacle": 0,
+      "remaining_obstacle": 100,
+      "corridor_lethal_cells": 0
+    },
+    "pass": true,
+    "rate_hz": 8.0
+  },
+  "protected_straight_4": {
+    "profile_speed": 4.0,
+    "parameters": {
+      "controller_server": {
+        "FollowPath.max_speed_xy": 4.0,
+        "FollowPath.PathFollow.lookahead_distance": 2.6,
+        "FollowPath.PathFollow.max_path_chord_deviation": 0.06,
+        "FollowPath.sim_time": 2.2,
+        "FollowPath.forward_prune_distance": 9.600000000000001
+      },
+      "velocity_smoother": {
+        "max_velocity": [
+          4.0,
+          4.0,
+          1.5
+        ],
+        "max_accel": [
+          0.7,
+          0.7,
+          2.4
+        ],
+        "max_decel": [
+          -2.5,
+          -2.5,
+          -3.2
+        ]
+      },
+      "scan_velocity_guard": {
+        "max_linear_speed": 4.0,
+        "predictive_enabled": true,
+        "prediction_horizon": 2.2
+      },
+      "collision_monitor": {
+        "NearStop.points": [
+          0.405,
+          0.0,
+          0.3912,
+          0.10482,
+          0.35074,
+          0.2025,
+          0.28638,
+          0.28638,
+          0.2025,
+          0.35074,
+          0.10482,
+          0.3912,
+          0.0,
+          0.405,
+          -0.10482,
+          0.3912,
+          -0.2025,
+          0.35074,
+          -0.28638,
+          0.28638,
+          -0.35074,
+          0.2025,
+          -0.3912,
+          0.10482,
+          -0.405,
+          0.0,
+          -0.3912,
+          -0.10482,
+          -0.35074,
+          -0.2025,
+          -0.28638,
+          -0.28638,
+          -0.2025,
+          -0.35074,
+          -0.10482,
+          -0.3912,
+          -0.0,
+          -0.405,
+          0.10482,
+          -0.3912,
+          0.2025,
+          -0.35074,
+          0.28638,
+          -0.28638,
+          0.35074,
+          -0.2025,
+          0.3912,
+          -0.10482
+        ],
+        "FootprintApproach.time_before_collision": 2.0
+      },
+      "local_costmap/local_costmap": {
+        "width": 20,
+        "height": 20
+      }
+    },
+    "passed": true,
+    "legs": [
+      {
+        "leg": "straight_out",
+        "status": 4,
+        "wall_seconds": 23.724155153999163,
+        "sim_seconds": 11.100000000000023,
+        "planned_length": 15.364811586740169,
+        "peak_speed": 3.9996291696815804,
+        "recoveries": 0,
+        "min_clearance": 0.700776051760293,
+        "max_deviation": 0.05863118049775878
+      },
+      {
+        "leg": "straight_back",
+        "status": 4,
+        "wall_seconds": 45.019757391000894,
+        "sim_seconds": 22.0,
+        "planned_length": 15.355523048838686,
+        "peak_speed": 3.703217989586506,
+        "recoveries": 0,
+        "min_clearance": 0.6525713718552849,
+        "max_deviation": 0.08929348736470447
+      }
+    ]
+  },
+  "final_live": {
+    "command": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "pose": [
+      0.22794533030499023,
+      1.0472930022467948,
+      0.01512116292075036
+    ],
+    "speed": 4.2006877234611385e-05,
+    "prediction": {
+      "source": "known_scene_routes",
+      "tracks": 2,
+      "frame": "odom"
+    },
+    "guard": {
+      "reason": "tracking_tf_pending",
+      "enabled": true,
+      "tracking_updates": 6471,
+      "prediction_checks": 2019,
+      "tracking_stamp": 2113.561,
+      "tracking_tf_error": null,
+      "command_chain_healthy": false,
+      "stable_tracks": 0
+    },
+    "parameters": {
+      "controller_server": {
+        "FollowPath.max_speed_xy": 4.0,
+        "FollowPath.max_vel_x": 4.0,
+        "FollowPath.max_vel_y": 4.0,
+        "FollowPath.acc_lim_x": 2.0,
+        "FollowPath.acc_lim_y": 2.0,
+        "FollowPath.sim_time": 1.8,
+        "FollowPath.critics": [
+          "Oscillation",
+          "ObstacleFootprint",
+          "PredictiveObstacle",
+          "PathFollow"
+        ],
+        "FollowPath.trajectory_generator_name": "bot_navigation::FineOmniTrajectoryGenerator",
+        "FollowPath.vx_samples": 11,
+        "FollowPath.vy_samples": 11
+      },
+      "velocity_smoother": {
+        "max_velocity": [
+          4.0,
+          4.0,
+          1.5
+        ],
+        "min_velocity": [
+          -4.0,
+          -4.0,
+          -1.5
+        ],
+        "max_accel": [
+          2.0,
+          2.0,
+          2.4
+        ],
+        "max_decel": [
+          -5.0,
+          -5.0,
+          -3.2
+        ]
+      },
+      "scan_velocity_guard": {
+        "max_linear_speed": 4.0,
+        "predictive_enabled": true,
+        "collision_footprint_radius": 0.325
+      },
+      "local_costmap/local_costmap": {
+        "width": 18,
+        "height": 18
+      },
+      "global_costmap/global_costmap": {
+        "plugins": [
+          "static_layer",
+          "obstacle_layer",
+          "inflation_layer",
+          "known_trajectory_layer"
+        ]
+      }
+    }
+  },
+  "fast_4": {
+    "passed": true,
+    "wall_seconds": 81.12900086699665,
+    "sim_seconds": 50.799999999999955,
+    "peak_speed": 3.219874067686459,
+    "min_clearance": 0.6433859672619333,
+    "max_deviation": 0.20511431659157384,
+    "recoveries": 0,
+    "parameters": {
+      "controller_server": {
+        "FollowPath.max_speed_xy": 4.0,
+        "FollowPath.PathFollow.lookahead_distance": 2.6,
+        "FollowPath.PathFollow.max_path_chord_deviation": 0.06,
+        "FollowPath.sim_time": 1.8,
+        "FollowPath.forward_prune_distance": 8.0
+      },
+      "velocity_smoother": {
+        "max_velocity": [
+          4.0,
+          4.0,
+          1.5
+        ],
+        "max_accel": [
+          2.0,
+          2.0,
+          2.4
+        ],
+        "max_decel": [
+          -5.0,
+          -5.0,
+          -3.2
+        ]
+      },
+      "scan_velocity_guard": {
+        "max_linear_speed": 4.0,
+        "predictive_enabled": true,
+        "prediction_horizon": 1.8
+      },
+      "collision_monitor": {
+        "NearStop.points": [
+          0.405,
+          0.0,
+          0.3912,
+          0.10482,
+          0.35074,
+          0.2025,
+          0.28638,
+          0.28638,
+          0.2025,
+          0.35074,
+          0.10482,
+          0.3912,
+          0.0,
+          0.405,
+          -0.10482,
+          0.3912,
+          -0.2025,
+          0.35074,
+          -0.28638,
+          0.28638,
+          -0.35074,
+          0.2025,
+          -0.3912,
+          0.10482,
+          -0.405,
+          0.0,
+          -0.3912,
+          -0.10482,
+          -0.35074,
+          -0.2025,
+          -0.28638,
+          -0.28638,
+          -0.2025,
+          -0.35074,
+          -0.10482,
+          -0.3912,
+          -0.0,
+          -0.405,
+          0.10482,
+          -0.3912,
+          0.2025,
+          -0.35074,
+          0.28638,
+          -0.28638,
+          0.35074,
+          -0.2025,
+          0.3912,
+          -0.10482
+        ],
+        "FootprintApproach.time_before_collision": 2.0
+      },
+      "local_costmap/local_costmap": {
+        "width": 18,
+        "height": 18
+      }
+    },
+    "legs": [
+      {
+        "leg": "preposition",
+        "status": 4,
+        "wall_seconds": 0.8912315369998396,
+        "sim_seconds": 0.7000000000000455,
+        "planned_length": 0.2500009571038659,
+        "peak_speed": 0.20000000548294986,
+        "recoveries": 0,
+        "min_clearance": 1.8578496051282793,
+        "max_deviation": 0.023120122454643344
+      },
+      {
+        "leg": "long_corridor",
+        "status": 4,
+        "wall_seconds": 26.5315883330004,
+        "sim_seconds": 16.799999999999955,
+        "planned_length": 15.851884363971475,
+        "peak_speed": 3.219874067686459,
+        "recoveries": 0,
+        "min_clearance": 0.9729439441212834,
+        "max_deviation": 0.20511431659157384
+      },
+      {
+        "leg": "enter_A",
+        "status": 4,
+        "wall_seconds": 19.529342911999265,
+        "sim_seconds": 11.799999999999955,
+        "planned_length": 7.422134152707737,
+        "peak_speed": 1.6411634764698373,
+        "recoveries": 0,
+        "min_clearance": 0.6461159005315589,
+        "max_deviation": 0.10243572008392138
+      },
+      {
+        "leg": "exit_A_return",
+        "status": 4,
+        "wall_seconds": 35.06806962199698,
+        "sim_seconds": 22.200000000000045,
+        "planned_length": 20.42696066424679,
+        "peak_speed": 3.185204391830668,
+        "recoveries": 0,
+        "min_clearance": 0.6433859672619333,
+        "max_deviation": 0.1290411723573361
+      }
+    ]
+  },
+  "fast_stop": {
+    "smoother": {
+      "max_velocity": [
+        4.0,
+        4.0,
+        1.5
+      ],
+      "max_accel": [
+        2.0,
+        2.0,
+        2.4
+      ],
+      "max_decel": [
+        -5.0,
+        -5.0,
+        -3.2
+      ]
+    },
+    "speed_at_cancel": 3.09907647076146,
+    "pose_at_cancel": [
+      1.2216635527000583,
+      1.060245663903906
+    ],
+    "sim_at_cancel": 1938.9,
+    "wall_at_cancel": 23230.986302822,
+    "pose_at_stop": [
+      0.20127650185972448,
+      1.045386524870458
+    ],
+    "stop_sim_seconds": 0.5,
+    "stop_wall_seconds": 0.8187530920004065,
+    "stop_distance": 1.0204952364099744,
+    "passed": true
+  }
+}

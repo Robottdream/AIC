@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -eo pipefail
+repo=/mnt/c/Users/21920/.codex/worktrees/5a40/AIC
+source /opt/ros/humble/setup.bash
+source /home/polarbear/ws_aic_mecanum_20261002/install/setup.bash
+source /home/polarbear/ws_aic_mecanum_20261002/tools/ros_env.sh
+for speed in 2 3 4; do
+  export AIC_PATH_CHECK_CONFIG=/home/polarbear/aic_speed_ladder_20261003/profiles/$speed/src/yzbot/bot_navigation/param/originbot_nav2_odom_mecanum.yaml
+  export AIC_PATH_CHECK_OUT=/home/polarbear/aic_speed_ladder_20261003/isolated-$speed
+  export AIC_PATH_AFTER_ONLY=1 ROS_DOMAIN_ID=167
+  python3 "$repo/tools/check_path_following.py"
+  export AIC_GUARD_CHECK_SPEED=$speed AIC_GUARD_CHECK_OUTPUT=/home/polarbear/aic_speed_ladder_20261003/guard-$speed.json ROS_DOMAIN_ID=166
+  python3 "$repo/tools/check_round_speed_guard.py"
+done

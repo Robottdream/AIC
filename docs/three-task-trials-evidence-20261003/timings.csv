@@ -1,0 +1,4 @@
+trial,start_sim_seconds,end_sim_seconds,total_sim_seconds,red_A_sim_seconds,blue_B_sim_seconds,status
+1,98.5,293.5,195.0,135.2,59.80000000000001,success
+2,46.7,254.2,207.5,146.8,60.69999999999999,success
+3,40.3,231.2,190.89999999999998,130.0,60.89999999999998,success

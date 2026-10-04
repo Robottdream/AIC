@@ -1,0 +1,12 @@
+{
+  "display_model": "round chassis + 4 omni wheels + arm yaw + side lidars",
+  "links": 24,
+  "visual_meshes": 30,
+  "triangles": 92028,
+  "chassis": {
+    "uri": "http://127.0.0.1:9090/assets/mybot_description/meshes/mecanum/base_link_blue_gray_chassis.stl",
+    "mesh_radius_m": 0.23999999980084238,
+    "triangles": 1020
+  },
+  "all_assets_readable": true
+}

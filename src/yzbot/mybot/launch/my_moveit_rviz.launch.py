@@ -1,3 +1,4 @@
+import os
 from moveit_configs_utils import MoveItConfigsBuilder
 from moveit_configs_utils.launches import generate_moveit_rviz_launch
  
@@ -17,7 +18,13 @@ from launch_ros.parameter_descriptions import ParameterValue
  
  
 def generate_launch_description():
-    moveit_config = MoveItConfigsBuilder("six_arm", package_name="mybot").to_moveit_configs()
+    builder = MoveItConfigsBuilder("six_arm", package_name="mybot")
+    if os.environ.get("AIC_ROBOT_MODEL", "legacy") == "mecanum":
+        from ament_index_python.packages import get_package_share_directory
+        builder.robot_description(file_path=os.path.join(get_package_share_directory('mybot_description'), 'urdf', 'originbot_mecanum_gazebo.xacro'))
+        builder.robot_description_semantic(file_path='config/six_arm_mecanum.srdf')
+        builder.trajectory_execution(file_path='config/moveit_controllers_mecanum.yaml')
+    moveit_config = builder.to_moveit_configs()
  
     ld = LaunchDescription()
  

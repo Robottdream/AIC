@@ -18,7 +18,8 @@ def remove_comments(text):
 def generate_launch_description():
     robot_name_in_model = 'six_arm'
     package_name = 'mybot_description'
-    urdf_name = "originbot_with_rgbd_gazebo_arm.xacro"
+    mecanum = os.environ.get("AIC_ROBOT_MODEL", "legacy") == "mecanum"
+    urdf_name = "originbot_mecanum_gazebo.xacro" if mecanum else "originbot_with_rgbd_gazebo_arm.xacro"
     world_file_path = 'room.world'
     #world_file_path = 'cloister.world'
  
@@ -121,6 +122,9 @@ def generate_launch_description():
     )
     
     ld = LaunchDescription()
+    # WSL can resolve the host name to its DNS proxy address after a restart.
+    # Use loopback for this local simulation, while allowing an explicit override.
+    ld.add_action(SetEnvironmentVariable('GAZEBO_IP', os.environ.get('GAZEBO_IP', '127.0.0.1')))
     # Gazebo converts package:// mesh URIs to model://; include the ROS share
     # parent so both server and GUI can resolve the description package.
     ld.add_action(SetEnvironmentVariable(
@@ -135,5 +139,9 @@ def generate_launch_description():
     ld.add_action(start_gazebo_client)
     ld.add_action(node_robot_state_publisher)
     ld.add_action(spawn_entity_cmd)
+    if mecanum:
+        ld.add_action(Node(package='bot_navigation', executable='mecanum_io.py', parameters=[{'use_sim_time': True}], output='screen'))
+        ld.add_action(RegisterEventHandler(OnProcessExit(target_action=load_joint_state_controller_gripper,
+            on_exit=[Node(package='controller_manager', executable='spawner', arguments=['arm_yaw_controller','mecanum_wheel_controller'], output='screen')])) )
  
     return ld

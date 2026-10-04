@@ -1,0 +1,17 @@
+{
+  "/map": {
+    "messages": 1,
+    "max_bytes": 3936420,
+    "observed_hz": null
+  },
+  "/global_costmap/costmap": {
+    "messages": 12,
+    "max_bytes": 3936439,
+    "observed_hz": 0.748862912529473
+  },
+  "/camera/image_raw": {
+    "messages": 69,
+    "max_bytes": 2764929,
+    "observed_hz": 4.600841670573283
+  }
+}

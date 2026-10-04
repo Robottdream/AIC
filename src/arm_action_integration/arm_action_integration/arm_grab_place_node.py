@@ -7,11 +7,18 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import String
 from linkattacher_msgs.srv import AttachLink, DetachLink
 import time
+import os
+import math
+import json
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import JointState
+from rclpy.qos import qos_profile_sensor_data
+from action_msgs.msg import GoalStatus
 
 class ArmGrabPlaceNode(Node):
     def __init__(self):
         super().__init__("arm_grab_place_node")
-        
+
         # ===================== 1. 新增：初始化状态发布器（给主控发确认信号）=====================
         self.arm_status_pub = self.create_publisher(String, "/arm_status", 10)
         self.get_logger().info("已初始化/arm_status发布器，用于发送抓取/放置确认")
@@ -74,6 +81,120 @@ class ArmGrabPlaceNode(Node):
         self.current_joint_pos = None
         self.current_step = 0
         self.current_task = None  # "grab" / "place"
+        self.align_enabled=os.environ.get('AIC_ARM_ALIGNMENT','0')=='1'
+        self.world_target=None; self.base_pose=None; self.base_received=0.
+        self.yaw_position=None; self.yaw_received=0.; self.yaw_busy=False
+        self.yaw_waiter=None; self.alignment_generation=0
+        if self.align_enabled:
+            self.yaw_client=ActionClient(self,FollowJointTrajectory,'/arm_yaw_controller/follow_joint_trajectory')
+            if not self.yaw_client.wait_for_server(timeout_sec=15.):
+                raise RuntimeError('Arm yaw controller unavailable')
+            self.create_subscription(String,'/arm_world_target',self.world_target_callback,10)
+            self.create_subscription(Odometry,'/odom',self.base_pose_callback,qos_profile_sensor_data)
+            self.create_subscription(JointState,'/joint_states',self.yaw_state_callback,qos_profile_sensor_data)
+            self.create_subscription(String,'/nav_status',self.alignment_nav_status,10)
+            self.create_timer(.2,self.prealign)
+
+    def alignment_nav_status(self,msg):
+        if msg.data in ('paused','emergency_stop'):
+            self.world_target=None; self.alignment_generation+=1
+            if getattr(self,'yaw_handle',None): self.yaw_handle.cancel_goal_async()
+            self.yaw_waiter=None
+            if self.yaw_busy and self.is_executing: self._reset_execution()
+
+    def world_target_callback(self,msg):
+        try:
+            target=json.loads(msg.data)
+            if target['kind'] not in ('grab','place'): return
+            if not all(math.isfinite(float(target[k])) for k in ('x','y')): return
+            self.world_target=target; self.alignment_generation+=1
+        except (ValueError,KeyError,TypeError):
+            self.get_logger().error('Invalid arm world target')
+
+    def base_pose_callback(self,msg):
+        p=msg.pose.pose; q=p.orientation
+        self.base_pose=(p.position.x,p.position.y,math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z)))
+        self.base_received=time.monotonic()
+
+    def yaw_state_callback(self,msg):
+        if 'arm_yaw_joint' in msg.name:
+            self.yaw_position=msg.position[msg.name.index('arm_yaw_joint')]
+            self.yaw_received=time.monotonic()
+
+    def desired_yaw(self):
+        if self.world_target is None or self.base_pose is None or self.yaw_position is None:
+            raise RuntimeError('Alignment target or feedback missing')
+        if time.monotonic()-min(self.base_received,self.yaw_received)>.6:
+            raise RuntimeError('Alignment feedback stale')
+        x,y,heading=self.base_pose
+        a=math.atan2(self.world_target['y']-y,self.world_target['x']-x)-heading
+        return math.atan2(math.sin(a),math.cos(a))
+
+    def prealign(self):
+        # Only the lifted pose may sweep while navigating. The bend sequence
+        # cannot run until the final measured yaw alignment succeeds.
+        if self.is_executing or self.yaw_busy or self.world_target is None or self.base_pose is None: return
+        x,y,_=self.base_pose
+        if math.hypot(self.world_target['x']-x,self.world_target['y']-y)>1.1: return
+        try:
+            a=self.desired_yaw()
+            if abs(a-self.yaw_position)>.12: self.rotate_yaw(a,None)
+        except RuntimeError: pass
+
+    def alignment_failed(self,reason):
+        self.get_logger().error('回转对准失败：'+str(reason))
+        self.arm_status_pub.publish(String(data='grasp_failed' if self.current_task=='grab' else 'place_failed'))
+        self._reset_execution()
+
+    def align_then_bend(self,callback):
+        if not self.align_enabled:
+            self.send_arm_action(self.arm_trajectory['bend'],callback); return
+        if self.world_target is None or self.world_target['kind'] != self.current_task:
+            self.alignment_failed('Missing matching task target'); return
+        if self.yaw_busy:
+            self.yaw_waiter=lambda:self.align_then_bend(callback); return
+        try:
+            a=self.desired_yaw()
+            if abs(a-self.yaw_position)<.04:
+                self.send_arm_action(self.arm_trajectory['bend'],callback)
+            else:
+                self.rotate_yaw(a,lambda:self.align_then_bend(callback))
+        except RuntimeError as e: self.alignment_failed(e)
+
+    def rotate_yaw(self,target,callback):
+        duration=max(.35,abs(target-self.yaw_position)/1.2+.15)
+        goal=FollowJointTrajectory.Goal(); goal.trajectory.joint_names=['arm_yaw_joint']
+        point=JointTrajectoryPoint(); point.positions=[target]
+        point.time_from_start.sec=int(duration); point.time_from_start.nanosec=int((duration%1)*1e9)
+        goal.trajectory.points=[point]
+        self.yaw_busy=True; generation=self.alignment_generation
+        self.get_logger().info(f'回转座对准 {target:.3f} rad，底盘保持朝向')
+        def accepted(f):
+            try:
+                handle=f.result()
+                if not handle.accepted: raise RuntimeError('Yaw goal rejected')
+                self.yaw_handle=handle
+                if generation != self.alignment_generation: handle.cancel_goal_async()
+                handle.get_result_async().add_done_callback(finished)
+            except Exception as e: finish(False,e)
+        def finished(f):
+            try:
+                result=f.result()
+                finish(result.status==GoalStatus.STATUS_SUCCEEDED and result.result.error_code==0,'Controller failure')
+            except Exception as e: finish(False,e)
+        def finish(ok,reason):
+            self.yaw_busy=False; self.yaw_handle=None
+            waiter=self.yaw_waiter; self.yaw_waiter=None
+            if generation != self.alignment_generation:
+                if waiter: waiter()
+                return
+            if not ok:
+                if callback or waiter: self.alignment_failed(reason)
+                else: self.get_logger().error(str(reason))
+                return
+            if waiter: waiter()
+            elif callback: callback()
+        self.yaw_client.send_goal_async(goal).add_done_callback(accepted)
 
     # ===================== 6. 原有目标物块更新（保留不变）=====================
     def target_cube_callback(self, msg):
@@ -238,7 +359,7 @@ class ArmGrabPlaceNode(Node):
     def _grab_proceed(self):
         if not self.is_executing:
             return
-            
+
         if self.current_step == 1:
             self.get_logger().info("步骤2：夹爪闭合...")
             self.current_step = 2
@@ -270,7 +391,7 @@ class ArmGrabPlaceNode(Node):
     def _place_proceed(self):
         if not self.is_executing:
             return
-            
+
         if self.current_step == 1:
             self.get_logger().info("步骤2：夹爪张开...")
             self.current_step = 2
@@ -314,7 +435,7 @@ class ArmGrabPlaceNode(Node):
             self.current_step = 1
             self.current_joint_pos = self.arm_trajectory["init"]
             self.get_logger().info("步骤1：机械臂弯曲到抓取位置...")
-            self.send_arm_action(self.arm_trajectory["bend"], self._grab_proceed)
+            self.align_then_bend(self._grab_proceed)
         else:
             self.get_logger().warn("正在执行抓取/放置流程，忽略本次信号！")
 
@@ -327,7 +448,7 @@ class ArmGrabPlaceNode(Node):
             self.current_step = 1
             self.current_joint_pos = self.arm_trajectory["init"]
             self.get_logger().info("步骤1：机械臂弯曲到放置位置...")
-            self.send_arm_action(self.arm_trajectory["bend"], self._place_proceed)
+            self.align_then_bend(self._place_proceed)
         else:
             self.get_logger().warn("正在执行抓取/放置流程，忽略本次信号！")
 

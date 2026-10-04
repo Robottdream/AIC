@@ -146,7 +146,7 @@ class Tracker:
         # persistent imaginary obstacle in the costmap.
         self.tracks = updated
 
-    def collision(self, robot_pose, linear, angular, horizon=1.8, observation_age=0.0):
+    def collision(self, robot_pose, linear, angular, horizon=1.8, observation_age=0.0, lateral=0.0):
         moving = [track for track in self.tracks if track.stable]
         if not moving:
             return None
@@ -155,11 +155,11 @@ class Tracker:
         for step in range(19):
             t = step * horizon / 18
             if abs(angular) < 1e-5:
-                relative_pose = (linear*t, 0.0, 0.0)
+                relative_pose = (linear*t, lateral*t, 0.0)
             else:
                 angle = angular*t
-                relative_pose = (linear/angular*math.sin(angle),
-                                 linear/angular*(1-math.cos(angle)), angle)
+                relative_pose = ((linear*math.sin(angle)+lateral*(math.cos(angle)-1))/angular,
+                                 (linear*(1-math.cos(angle))+lateral*math.sin(angle))/angular, angle)
             xy = to_world(relative_pose[:2], robot_pose)
             future_pose = (*xy, robot_pose[2]+relative_pose[2])
             for track in moving:

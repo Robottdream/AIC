@@ -27,6 +27,15 @@
 set -u
 
 WS="$(cd "$(dirname "$0")" && pwd)"
+# An explicit local selection keeps the familiar entry point on the active
+# test workspace while preserving this workspace's original sources/configs.
+if [ "${AIC_ROBOT_MODEL:-}" != legacy ] && [ -f "$WS/.aic_active_workspace" ]; then
+  ACTIVE_WS="$(head -n 1 "$WS/.aic_active_workspace")"
+  if [ "$(realpath "$ACTIVE_WS")" != "$(realpath "$WS")" ] && [ -f "$ACTIVE_WS/ros_round_omni_start.sh" ]; then
+    echo "[车型] 圆形全向轮；转交运行工作空间：$ACTIVE_WS"
+    exec bash "$ACTIVE_WS/ros_round_omni_start.sh" "$@"
+  fi
+fi
 SELF="$WS/$(basename "$0")"
 RUN_DIR="$WS/log/run"
 PID_FILE="$RUN_DIR/pids"
@@ -34,7 +43,7 @@ PREFLIGHT_PY="$WS/tools/preflight_check.py"
 PREFLIGHT_OUT="$RUN_DIR/preflight.txt"
 NAMES="01_gazebo 02_moveit 03_nav2 04_llama 05_parser 06_nav 07_arm 08_detector 09_main 10_rosbridge 11_watchdog"
 WATCH_PERIOD=30
-NAV2_BIN_PATTERNS="/bot_navigation/scan_velocity_guard.py /nav2_collision_monitor/collision_monitor /nav2_controller/controller_server /nav2_smoother/smoother_server /nav2_planner/planner_server /nav2_behaviors/behavior_server /nav2_bt_navigator/bt_navigator /nav2_waypoint_follower/waypoint_follower /nav2_velocity_smoother/velocity_smoother /nav2_amcl/amcl /nav2_map_server/map_server /nav2_lifecycle_manager/lifecycle_manager"
+NAV2_BIN_PATTERNS="/bot_navigation/scan_velocity_guard.py /bot_navigation/known_obstacle_forecaster.py /nav2_collision_monitor/collision_monitor /nav2_controller/controller_server /nav2_smoother/smoother_server /nav2_planner/planner_server /nav2_behaviors/behavior_server /nav2_bt_navigator/bt_navigator /nav2_waypoint_follower/waypoint_follower /nav2_velocity_smoother/velocity_smoother /nav2_amcl/amcl /nav2_map_server/map_server /nav2_lifecycle_manager/lifecycle_manager"
 
 if grep -q $'\r' "$0" 2>/dev/null; then
   echo "[init] 脚本自身是 CRLF 行尾，转换为 LF 后重新执行..."
@@ -49,7 +58,7 @@ NO_WATCHDOG=0
 LOG_TARGET=""
 for a in "$@"; do
   case "$a" in
-    start|stop|status|restart|logs|doctor|watchdog) CMD="$a" ;;
+    start|stop|status|restart|recover|logs|doctor|watchdog) CMD="$a" ;;
     --no-rviz) NO_RVIZ=1 ;;
     --headless) NO_GUI=1; NO_RVIZ=1 ;;
     --no-watchdog) NO_WATCHDOG=1 ;;
@@ -491,6 +500,7 @@ case "$CMD" in
   stop)     stop_all ;;
   status)   load_env; show_status ;;
   restart)  stop_all; echo; start_all ;;
+  recover)  load_env; nav2_recover ;;
   doctor)   doctor ;;
   watchdog) watchdog_loop ;;
   logs)     show_logs ;;

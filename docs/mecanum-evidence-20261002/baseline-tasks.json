@@ -1,0 +1,26 @@
+[
+  {
+    "task": 1,
+    "command": "抓取1个蓝色去B",
+    "status": "success",
+    "seconds": 50.12515430299982,
+    "places": 1,
+    "sim_seconds": 41.20000000000002
+  },
+  {
+    "task": 2,
+    "command": "抓取1个红色去A",
+    "status": "success",
+    "seconds": 81.46914725200031,
+    "places": 1,
+    "sim_seconds": 64.80000000000001
+  },
+  {
+    "task": 3,
+    "command": "抓取1个蓝色去A",
+    "status": "success",
+    "seconds": 26.250495991000207,
+    "places": 1,
+    "sim_seconds": 22.799999999999983
+  }
+]

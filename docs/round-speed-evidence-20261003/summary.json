@@ -1,0 +1,158 @@
+{
+  "old_max_speed_mps": 0.7,
+  "new_max_speed_mps": 1.0,
+  "limit_increase_percent": 42.9,
+  "old_axis_acceleration_mps2": 0.35,
+  "new_axis_acceleration_mps2": 0.7,
+  "live": {
+    "guard": {
+      "reason": "tracking_tf_pending",
+      "enabled": true,
+      "tracking_updates": 1730,
+      "prediction_checks": 0,
+      "tracking_stamp": 1549.208,
+      "tracking_tf_error": null,
+      "command_chain_healthy": false,
+      "stable_tracks": 0
+    },
+    "command": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "pose": [
+      2.8912681034240344,
+      -1.9205512234333566,
+      0.004623558755345096
+    ],
+    "speed": 1.6334452085304844e-05,
+    "prediction": {
+      "source": "known_scene_routes",
+      "tracks": 2,
+      "frame": "odom"
+    },
+    "parameters": {
+      "controller_server": {
+        "FollowPath.max_speed_xy": 1.0,
+        "FollowPath.max_vel_x": 1.0,
+        "FollowPath.max_vel_y": 1.0,
+        "FollowPath.acc_lim_x": 0.7,
+        "FollowPath.acc_lim_y": 0.7,
+        "FollowPath.sim_time": 1.8,
+        "FollowPath.critics": [
+          "Oscillation",
+          "ObstacleFootprint",
+          "PredictiveObstacle",
+          "GoalDist",
+          "PathDist"
+        ]
+      },
+      "velocity_smoother": {
+        "max_velocity": [
+          1.0,
+          1.0,
+          1.5
+        ],
+        "min_velocity": [
+          -1.0,
+          -1.0,
+          -1.5
+        ],
+        "max_accel": [
+          0.7,
+          0.7,
+          2.4
+        ],
+        "max_decel": [
+          -2.5,
+          -2.5,
+          -3.2
+        ]
+      },
+      "scan_velocity_guard": {
+        "max_linear_speed": 1.0,
+        "predictive_enabled": true
+      },
+      "local_costmap/local_costmap": {
+        "width": 6,
+        "height": 6
+      },
+      "global_costmap/global_costmap": {
+        "plugins": [
+          "static_layer",
+          "obstacle_layer",
+          "inflation_layer",
+          "known_trajectory_layer"
+        ]
+      }
+    }
+  },
+  "controller_check": {
+    "baseline": [
+      1.0,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "crossing": [
+      0.19999999999999996,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "approaching": [
+      -0.20000000000000007,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "stale": [
+      1.0,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "known_linear": [
+      0.19999999999999996,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "known_turn": [
+      -0.20000000000000007,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "crossing_rejected": 21,
+    "isolated_domain": 164,
+    "robot_motion": false,
+    "passed": true
+  },
+  "guard_check": {
+    "forward": [
+      1.0,
+      0.0,
+      0.2
+    ],
+    "diagonal": [
+      0.7071067811865475,
+      0.7071067811865475,
+      0.2
+    ],
+    "reverse": [
+      -1.0,
+      0.0,
+      0.2
+    ],
+    "below_limit": [
+      0.6,
+      0.2,
+      0.2
+    ],
+    "scan_loss_stops": true,
+    "command_loss_stops": true,
+    "pose_loss_stops": true,
+    "passed": true,
+    "isolated_domain": 166,
+    "robot_motion": false
+  },
+  "static_ego_compensation_cases_at_new_speed": 32,
+  "actual_drive_comparison": "4m route attempt timed out with no displacement; canceled; no throughput improvement proven",
+  "full_task_tested": false,
+  "original_workspace_modified": false
+}

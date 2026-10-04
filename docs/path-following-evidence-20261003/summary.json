@@ -1,0 +1,347 @@
+{
+  "controller": {
+    "lookahead_m": 0.65,
+    "control_prefix_s": 0.6,
+    "prefix_corridor_m": 0.12,
+    "off_path_allowance_m": 0.03,
+    "whole_horizon_mean_weight": 0.5,
+    "whole_horizon_peak_weight": 0.25,
+    "scale": 24.0,
+    "simulation_horizon_s": 1.8
+  },
+  "isolated": {
+    "replay-before": {
+      "status": null,
+      "pose": [
+        2.402217075760321,
+        -1.4455868625258192
+      ],
+      "cmd": [
+        0.0,
+        0.025
+      ],
+      "max_deviation": 0.0
+    },
+    "replay-after": {
+      "status": null,
+      "pose": [
+        2.402217075760321,
+        -1.4455868625258192
+      ],
+      "cmd": [
+        0.39999999999999997,
+        -5.551115123125783e-17
+      ],
+      "max_deviation": 0.0
+    },
+    "near_tail-before": {
+      "status": 4,
+      "pose": [
+        2.6664653456586107,
+        -5.612280227586372
+      ],
+      "cmd": [
+        -0.05,
+        -0.07500000000000001
+      ],
+      "max_deviation": 0.06649730236317361
+    },
+    "near_tail-after": {
+      "status": 4,
+      "pose": [
+        2.661965345658613,
+        -5.6020302275863685
+      ],
+      "cmd": [
+        -0.05,
+        -0.07500000000000001
+      ],
+      "max_deviation": 0.07511908474851779
+    },
+    "curve-before": {
+      "status": 4,
+      "pose": [
+        1.787749999999998,
+        2.860500000000005
+      ],
+      "cmd": [
+        0.0,
+        0.0
+      ],
+      "max_deviation": 0.8034999999999997
+    },
+    "curve-after": {
+      "status": 4,
+      "pose": [
+        1.7614999999999996,
+        2.8599999999999985
+      ],
+      "cmd": [
+        0.0,
+        0.0
+      ],
+      "max_deviation": 0.130956363450611
+    }
+  },
+  "prediction_regression": {
+    "baseline": [
+      1.0,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "crossing": [
+      -0.025,
+      0.0,
+      0.0
+    ],
+    "approaching": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "stale": [
+      1.0,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "approaching_all_candidates_rejected_stop": true,
+    "near_goal": [
+      0.07500000000000001,
+      0.07500000000000001,
+      0.0
+    ],
+    "known_linear": [
+      0.07500000000000001,
+      0.0,
+      0.0
+    ],
+    "known_turn": [
+      -0.20000000000000007,
+      -5.551115123125783e-17,
+      -0.0
+    ],
+    "crossing_rejected": 25,
+    "isolated_domain": 164,
+    "robot_motion": false,
+    "passed": true
+  },
+  "business": {
+    "requested": "抓取3个红色去A",
+    "selected": [
+      "red_cube_4",
+      "red_cube_3",
+      "red_cube_2"
+    ],
+    "placed_count": 3,
+    "all_tasks_complete": true,
+    "task_events": [
+      {
+        "wall": 55.32069376199979,
+        "sim": 1020.1,
+        "topic": "nav_status",
+        "data": "succeeded"
+      },
+      {
+        "wall": 57.416116317999695,
+        "sim": 1021.7,
+        "topic": "arm_status",
+        "data": "place_succeeded"
+      },
+      {
+        "wall": 90.19544759999917,
+        "sim": 1044.2,
+        "topic": "nav_status",
+        "data": "succeeded"
+      },
+      {
+        "wall": 103.50988907099963,
+        "sim": 1052.8,
+        "topic": "nav_status",
+        "data": "succeeded"
+      },
+      {
+        "wall": 105.49185151299935,
+        "sim": 1054.3,
+        "topic": "arm_status",
+        "data": "grasp_succeeded"
+      },
+      {
+        "wall": 149.485686222999,
+        "sim": 1084.4,
+        "topic": "nav_status",
+        "data": "succeeded"
+      },
+      {
+        "wall": 152.6917561829996,
+        "sim": 1086.8,
+        "topic": "arm_status",
+        "data": "place_succeeded"
+      },
+      {
+        "wall": 181.11274766199858,
+        "sim": 1106.1,
+        "topic": "nav_status",
+        "data": "succeeded"
+      },
+      {
+        "wall": 183.16832822200013,
+        "sim": 1107.6,
+        "topic": "arm_status",
+        "data": "grasp_succeeded"
+      },
+      {
+        "wall": 212.54307761199925,
+        "sim": 1127.0,
+        "topic": "nav_status",
+        "data": "succeeded"
+      },
+      {
+        "wall": 214.9013679869986,
+        "sim": 1128.7,
+        "topic": "arm_status",
+        "data": "place_succeeded"
+      }
+    ],
+    "note": "Original task preserved. First item includes debugging and two intentional Nav2 recoveries; not a full-task speed comparison.",
+    "placements": [
+      {
+        "model": "red_cube_4",
+        "pose_xyz_rpy": [
+          3.33274,
+          -5.79067,
+          0.749997,
+          3e-06,
+          -4e-06,
+          2.80877
+        ],
+        "xy_inside_A": true
+      },
+      {
+        "model": "red_cube_3",
+        "pose_xyz_rpy": [
+          3.12978,
+          -5.71874,
+          0.749999,
+          4e-06,
+          -2e-06,
+          3.13156
+        ],
+        "xy_inside_A": true
+      },
+      {
+        "model": "red_cube_2",
+        "pose_xyz_rpy": [
+          3.27997,
+          -5.7666,
+          0.749998,
+          1e-06,
+          3e-06,
+          1.13745
+        ],
+        "xy_inside_A": true
+      }
+    ]
+  },
+  "deployed_parameters": {
+    "controller_server": {
+      "FollowPath.critics": [
+        "Oscillation",
+        "ObstacleFootprint",
+        "PredictiveObstacle",
+        "PathFollow"
+      ],
+      "FollowPath.PathFollow.scale": 24.0,
+      "FollowPath.PathFollow.lookahead_distance": 0.65,
+      "FollowPath.PathFollow.control_horizon": 0.6,
+      "FollowPath.PathFollow.max_prefix_deviation": 0.12,
+      "FollowPath.trajectory_generator_name": "bot_navigation::FineOmniTrajectoryGenerator",
+      "FollowPath.sim_time": 1.8
+    },
+    "velocity_smoother": {
+      "feedback": "OPEN_LOOP",
+      "scale_velocities": false,
+      "smoothing_frequency": 20.0,
+      "max_accel": [
+        0.7,
+        0.7,
+        2.4
+      ],
+      "max_decel": [
+        -2.5,
+        -2.5,
+        -3.2
+      ]
+    },
+    "scan_velocity_guard": {
+      "max_linear_speed": 1.0,
+      "predictive_enabled": true,
+      "collision_footprint_radius": 0.325
+    },
+    "collision_monitor": {
+      "NearStop.points": [
+        0.405,
+        0.0,
+        0.3912,
+        0.10482,
+        0.35074,
+        0.2025,
+        0.28638,
+        0.28638,
+        0.2025,
+        0.35074,
+        0.10482,
+        0.3912,
+        0.0,
+        0.405,
+        -0.10482,
+        0.3912,
+        -0.2025,
+        0.35074,
+        -0.28638,
+        0.28638,
+        -0.35074,
+        0.2025,
+        -0.3912,
+        0.10482,
+        -0.405,
+        0.0,
+        -0.3912,
+        -0.10482,
+        -0.35074,
+        -0.2025,
+        -0.28638,
+        -0.28638,
+        -0.2025,
+        -0.35074,
+        -0.10482,
+        -0.3912,
+        -0.0,
+        -0.405,
+        0.10482,
+        -0.3912,
+        0.2025,
+        -0.35074,
+        0.28638,
+        -0.28638,
+        0.35074,
+        -0.2025,
+        0.3912,
+        -0.10482
+      ],
+      "FootprintApproach.footprint_topic": "/navigation/collision_footprint"
+    }
+  },
+  "final_control_loop_misses": 7,
+  "initial_door_region": {
+    "samples": 351,
+    "minimum_center_to_lidar_point_m": 0.5253989864556494,
+    "max_current_path_deviation_m": 0.08038496889088158,
+    "max_local_prefix_deviation_m": 0.11923725315464817
+  },
+  "final_door_region": {
+    "samples": 105,
+    "minimum_center_to_lidar_point_m": 0.6160458432142756,
+    "max_current_path_deviation_m": 0.11500918099747257,
+    "max_local_prefix_deviation_m": 0.12591674399065803
+  }
+}
