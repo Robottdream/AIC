@@ -41,7 +41,7 @@ class MainControllerNode(Node):
             (-3.703343, 0.829596, False)
         ]
         self.AREA_COORDS = {
-            "A": (2.593086, -5.727858),
+            "A": (2.593086, -5.970000),
             "B": (-1.746544, -6.485499),
             "C": (-6.873777, -7.785160)
         }
@@ -222,7 +222,7 @@ class MainControllerNode(Node):
     def _approach_penalty(color, block_index, candidate_index):
         # These approaches completed the full mission without a progress
         # recovery. Keep alternatives available if the preferred path closes.
-        preferred = {("red", 2): 2, ("blue", 4): 1}
+        preferred = {("red", 1): 0, ("red", 2): 2, ("blue", 4): 1}
         direction = preferred.get((color, block_index))
         return 20.0 if direction is not None and candidate_index != direction else 0.0
 
@@ -280,7 +280,13 @@ class MainControllerNode(Node):
             key = (score, current_cost, block[2], candidate_index)
             if best is None or key < best[0]:
                 best = (key, (current_cost, block, candidate_index))
-        return best[1] if best else self.selection_best
+        if best is None:
+            return self.selection_best
+        # A lookahead estimate must not send this delivery on a much longer
+        # current round trip; live obstacle positions make future paths noisy.
+        if best[1][0] > self.selection_best[0] + 3.0:
+            return self.selection_best
+        return best[1]
 
     def _plan_next_candidate(self, selection_id):
         if selection_id != self.selection_id or self.current_step != "SELECT_BLOCK":
@@ -290,6 +296,11 @@ class MainControllerNode(Node):
                 self._stop_failed_task("当前没有可达且可返回目标区域的同色物块")
                 return
             greedy_best = self.selection_best
+            option_summary = sorted(self.selection_options, key=lambda o: o[0])[:8]
+            self.get_logger().info("候选往返代价: " + ", ".join(
+                f"{self.current_task['color']}_cube_{option[2][2] + 1}"
+                f"/方向{option[3] + 1}={option[0]:.1f}m"
+                for option in option_summary))
             self.selection_best = self._choose_route_with_lookahead()
             _, block, candidate_index = self.selection_best
             if (block[2], candidate_index) != (greedy_best[1][2], greedy_best[2]):
@@ -851,6 +862,33 @@ class MainControllerNode(Node):
         elif status == "grasp_failed" and self.current_step == "GRASP":
             self.get_logger().warn("机械臂抓取失败，立即重试")
             self._check_grasp(self_ref)
+        elif status.startswith("place_reposition:") and self.current_step == "PLACE":
+            if self.place_timer:
+                self.place_timer.cancel()
+                self.place_timer.destroy()
+                self.place_timer = None
+            try:
+                _, dx_text, dy_text = status.split(":")
+                dx, dy = float(dx_text), float(dy_text)
+                if not all(math.isfinite(v) for v in (dx, dy)):
+                    raise ValueError("non-finite cube offset")
+                if self.current_place_retry >= self.max_place_retry:
+                    self._stop_failed_task("物块放置位置修正三次仍失败")
+                    return
+                x, y, yaw = self.area_nav_targets[-1]
+                # Replan around obstacles with Nav2; never drive the base
+                # directly or spin it beside the placement board.
+                corrected = (x + max(-0.35, min(0.35, dx)),
+                             y + max(-0.35, min(0.35, dy)), yaw)
+                self.area_nav_targets[-1] = corrected
+                self.area_nav_target_index = len(self.area_nav_targets) - 1
+                self.current_area_nav_retry = 0
+                self.get_logger().warn(f"物块偏离放置区，重新导航到 {corrected}")
+                self._send_current_area_target()
+            except (ValueError, IndexError) as exc:
+                self._stop_failed_task(f"放置修正数据无效: {exc}")
+        elif status == "place_lost" and self.current_step == "PLACE":
+            self._stop_failed_task("物块分离后未落在目标区域，停止以避免误报完成")
         elif status == "place_failed" and self.current_step == "PLACE":
             self.get_logger().warn("机械臂放置失败，立即重试")
             self._check_place(self_ref)

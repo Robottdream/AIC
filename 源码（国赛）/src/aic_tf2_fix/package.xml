@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>aic_tf2_fix</name>
+  <version>0.1.0</version>
+  <description>Project scoped asynchronous TF wait lock-order repair for Humble 0.25.23.</description>
+  <maintainer email="aic@example.invalid">AIC maintainers</maintainer>
+  <license>BSD-3-Clause</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>tf2_ros</depend>
+  <depend>rclcpp</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
