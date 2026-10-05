@@ -40,9 +40,10 @@ class MainControllerNode(Node):
             (-9.664453, -3.267239, False),
             (-3.703343, 0.829596, False)
         ]
+        # Base parking poses; the arm still checks the unchanged physical zone bounds.
         self.AREA_COORDS = {
             "A": (2.593086, -5.970000),
-            "B": (-1.746544, -6.485499),
+            "B": (-1.746544, -6.585499),
             "C": (-6.873777, -7.785160)
         }
         

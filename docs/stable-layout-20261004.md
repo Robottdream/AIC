@@ -29,7 +29,8 @@ stable 原有红三件 A、蓝两件 B 的计时实验（会自动发任务，�
 
 结构迁移时保留 stable 导航参数、模型、任务算法和默认 DDS 环境。
 后续雷达与提速调整记录在 ghost-obstacles-20261005.md、speed-20261005.md、
-speed2-20261005.md；当前通过验证的速度为1.6 m/s，WSL默认DDS通信使用回环UDP。
+speed2-20261005.md、speed3-20261005.md、speed4-20261005.md、repeat22-20261005.md；
+当前保留的直行速度为2.2 m/s，WSL默认DDS通信使用回环UDP。
 启动前过滤 WSL 继承的 Windows PATH，避免 CMake 在 Windows SDK 目录中慢速查找。
 图形开关只控制 Gazebo 客户端和 RViz，不改变仿真参数。
 沿用安全 rosbridge 的服务线程、超时、大消息与网格 HTTP 读取支持。

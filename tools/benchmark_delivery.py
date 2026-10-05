@@ -13,7 +13,7 @@ from rclpy.action import ActionClient
 parser = argparse.ArgumentParser(description="Gazebo delivery benchmark; excludes language parsing latency")
 parser.add_argument('--log-dir', required=True)
 parser.add_argument('--timeout', type=float, default=380.)
-parser.add_argument('--use-running', action='store_true', help='Use the one-click stack; do not start/stop modules')
+parser.add_argument('--use-running', action='store_true', help='Use the one-click stack; stop it on detected instability')
 args = parser.parse_args()
 log = Path(args.log_dir).resolve()
 log.mkdir(parents=True, exist_ok=False)
@@ -53,6 +53,8 @@ try:
  tilt_samples=[]
  angular_samples=[]
  instability=[None]
+ motion_samples=[]
+ latest_commands={}
  def on_odom(msg):
   velocity=msg.twist.twist.linear
   speed_samples.append((velocity.x**2+velocity.y**2)**0.5)
@@ -63,13 +65,23 @@ try:
   tilt_samples.append(math.degrees(max(abs(roll),abs(pitch))))
   angular_samples.append(abs(msg.twist.twist.angular.z))
   p=msg.pose.pose.position
+  motion_samples.append(dict(sim=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9,
+   wall=time.monotonic(),x=p.x,y=p.y,z=p.z,
+   yaw=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z)),
+   v=speed_samples[-1],w=msg.twist.twist.angular.z,tilt_deg=tilt_samples[-1],**latest_commands))
   if tilt_samples[-1]>5.0 or abs(p.x)>20.0 or abs(p.y)>20.0 or p.z>0.3:
    instability[0]=dict(position=(p.x,p.y,p.z),tilt_deg=tilt_samples[-1])
  node.create_subscription(Odometry,'/odom',on_odom,QoSProfile(depth=20,reliability=ReliabilityPolicy.BEST_EFFORT,durability=DurabilityPolicy.VOLATILE))
  nav_command_speeds=[]
  base_command_speeds=[]
- node.create_subscription(Twist,'/cmd_vel_nav',lambda msg:nav_command_speeds.append(abs(msg.linear.x)),10)
- node.create_subscription(Twist,'/cmd_vel',lambda msg:base_command_speeds.append(abs(msg.linear.x)),10)
+ def nav_command(msg):
+  nav_command_speeds.append(abs(msg.linear.x))
+  latest_commands.update(nav_v=msg.linear.x,nav_w=msg.angular.z)
+ def base_command(msg):
+  base_command_speeds.append(abs(msg.linear.x))
+  latest_commands.update(cmd_v=msg.linear.x,cmd_w=msg.angular.z)
+ node.create_subscription(Twist,'/cmd_vel_nav',nav_command,10)
+ node.create_subscription(Twist,'/cmd_vel',base_command,10)
  latest_amcl=[None]
  def on_amcl(msg):
   pose=msg.pose.pose
@@ -95,7 +107,11 @@ try:
  after_sleep=time.monotonic();until=after_sleep+10
  while (clock_wall[0] is None or clock_wall[0]<after_sleep) and time.monotonic()<until:rclpy.spin_once(node,timeout_sec=.2)
  if clock_wall[0] is None or clock_wall[0]<after_sleep:raise RuntimeError('Fresh Gazebo /clock not available')
+ until=time.monotonic()+5
+ while not motion_samples and time.monotonic()<until:rclpy.spin_once(node,timeout_sec=.1)
+ if not motion_samples:raise RuntimeError('Gazebo odometry not available')
  speed_samples.clear()
+ tilt_samples.clear();angular_samples.clear();motion_samples.clear()
  began=time.monotonic();sim_began=clock_ns[0]
  pub.publish(String(data=json.dumps([dict(color='red',num=3,to='A'),dict(color='blue',num=2,to='B')])))
  print(f'START wall={began:.3f} sim={sim_began/1e9:.3f}',flush=True)
@@ -108,6 +124,11 @@ try:
   s=(log/'main.log').read_text(errors='replace')
   if instability[0]:
    print(f'ABORT_INSTABILITY {instability[0]}',flush=True)
+   instability[0]['wall_seconds']=time.monotonic()-began
+   # Save the trace before stopping Gazebo; the task controller otherwise keeps running.
+   (log/'motion.json').write_text(json.dumps(motion_samples,indent=2))
+   if args.use_running:
+    subprocess.run(['python3',str(Path(__file__).resolve().parent/'project_launcher.py'),'stop'],check=True,timeout=30)
    break
   counts=(s.count('机械臂抓取成功'),s.count('机械臂放置成功'))
   arrival_count=s.count('到达目标区域，准备放置')
@@ -144,16 +165,16 @@ try:
   if '所有优化任务执行完成' in s:break
   if '停止以避免误报完成' in s or '目标区域导航失败：' in s:break
   if any(p.poll() is not None for p,_ in processes):raise RuntimeError('child exited')
- elapsed=time.monotonic()-began
+ elapsed=instability[0]['wall_seconds'] if instability[0] else time.monotonic()-began
  moving_samples=[v for v in speed_samples if v>0.05]
  fraction_above_062=sum(v>=0.62 for v in moving_samples)/len(moving_samples) if moving_samples else 0.0
  mean_moving_speed=sum(moving_samples)/len(moving_samples) if moving_samples else 0.0
- result=dict(timing_scope='parsed /chat publish to fifth place confirmation; excludes language parsing',wall_seconds=elapsed,sim_seconds=(clock_ns[0]-sim_began)/1e9,peak_odom_linear_mps=max(speed_samples,default=0.0),moving_fraction_at_least_062=fraction_above_062,mean_moving_speed_mps=mean_moving_speed,peak_nav_command_mps=max(nav_command_speeds,default=0.0),peak_base_command_mps=max(base_command_speeds,default=0.0),seconds=elapsed,complete='所有优化任务执行完成' in s,grasp_count=s.count('机械臂抓取成功'),place_count=s.count('机械臂放置成功'),arrivals=arrivals,placements=placements)
+ result=dict(timing_scope='parsed /chat publish to fifth place confirmation; excludes language parsing',wall_seconds=elapsed,sim_seconds=(clock_ns[0]-sim_began)/1e9,peak_odom_linear_mps=max(speed_samples,default=0.0),moving_fraction_at_least_062=fraction_above_062,mean_moving_speed_mps=mean_moving_speed,peak_nav_command_mps=max(nav_command_speeds,default=0.0),peak_base_command_mps=max(base_command_speeds,default=0.0),seconds=elapsed,complete=not instability[0] and '所有优化任务执行完成' in s,grasp_count=s.count('机械臂抓取成功'),place_count=s.count('机械臂放置成功'),arrivals=arrivals,placements=placements)
  result['final_positions']={p['cube']:p['position_at_confirmation'] for p in placements if p['cube'] and p['position_at_confirmation']}
  result['max_tilt_deg']=max(tilt_samples,default=0.0)
  result['aborted_for_instability']=instability[0]
  result['peak_angular_radps']=max(angular_samples,default=0.0)
- for cube in sorted(set(re.findall(r'选定可达物块：((?:red|blue)_cube_\d+)', s))):
+ for cube in ([] if instability[0] else sorted(set(re.findall(r'选定可达物块：((?:red|blue)_cube_\d+)', s)))):
   try:
    out=subprocess.check_output(['gz','model','-m',cube,'-p'],timeout=8,text=True)
    (log/(cube+'.pose')).write_text(out)
@@ -168,6 +189,7 @@ try:
  result['all_five_in_zones']=len(result['zone_checks'])==5 and all(result['zone_checks'].values())
  result['height_checks']={cube:0.02<=pos[2]<=0.055 for cube,pos in result.get('final_positions',{}).items()}
  result['all_five_on_zone_surface']=result['all_five_in_zones'] and all(result['height_checks'].values())
+ (log/'motion.json').write_text(json.dumps(motion_samples,indent=2))
  (log/'result.json').write_text(json.dumps(result,indent=2));print(result,flush=True)
 finally:
  for p,f in reversed(processes):

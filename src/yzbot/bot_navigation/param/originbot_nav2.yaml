@@ -58,7 +58,8 @@ bt_navigator:
     robot_base_frame: base_link
     odom_topic: /odom
     bt_loop_duration: 10
-    default_server_timeout: 20
+    # Allow action acknowledgements to survive brief WSL scheduling delays.
+    default_server_timeout: 200
     # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
     # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
     # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
@@ -143,7 +144,7 @@ controller_server:
     # RPP slows before sharp turns and when the costmap shows nearby walls.
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 1.6
+      desired_linear_vel: 2.2
       lookahead_dist: 0.55
       min_lookahead_dist: 0.35
       max_lookahead_dist: 1.0
@@ -338,7 +339,7 @@ velocity_smoother:
     smoothing_frequency: 30.0
     feedback: "OPEN_LOOP"
     scale_velocities: false
-    max_velocity: [1.6, 0.0, 2.5]
+    max_velocity: [2.2, 0.0, 2.5]
     min_velocity: [-0.3, 0.0, -2.5]
     max_accel: [3.5, 0.0, 6.0]
     max_decel: [-5.0, 0.0, -6.0]

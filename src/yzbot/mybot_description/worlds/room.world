@@ -75,7 +75,7 @@
         <constraints>
           <cfm>0.000000</cfm>
           <erp>0.200000</erp>
-          <contact_max_correcting_vel>30.000000</contact_max_correcting_vel>
+          <contact_max_correcting_vel>34.000000</contact_max_correcting_vel>
           <contact_surface_layer>0.000000</contact_surface_layer>
         </constraints>
       </ode>

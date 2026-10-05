@@ -68,7 +68,7 @@ class SimpleNav2Navigator(Node):
         self.crossing_max_wait = max(0.0, min(30.0, float(
             self.declare_parameter("crossing_max_wait", 12.0).value)))
         self.crossing_cruise_speed = max(0.1, float(
-            self.declare_parameter("crossing_cruise_speed", 1.6).value))
+            self.declare_parameter("crossing_cruise_speed", 2.2).value))
         self.crossing_acceleration = max(0.1, float(
             self.declare_parameter("crossing_acceleration", 3.5).value))
         
@@ -147,7 +147,7 @@ class SimpleNav2Navigator(Node):
         # robot at the pickup point even though the path ahead is free.
         if distance > 2.0:
             return 0.0
-        speed = getattr(self, 'crossing_cruise_speed', 1.6)
+        speed = getattr(self, 'crossing_cruise_speed', 2.2)
         acceleration = getattr(self, 'crossing_acceleration', 3.5)
         ramp_distance = speed * speed / (2.0 * acceleration)
         travel_seconds = (math.sqrt(2.0 * distance / acceleration)

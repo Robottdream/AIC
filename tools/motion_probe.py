@@ -3,6 +3,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+import subprocess
 import time
 import rclpy
 from rclpy.action import ActionClient
@@ -23,6 +24,7 @@ def main():
     node.set_parameters([Parameter('use_sim_time', value=True)])
     state = {}
     samples = []
+    instability = {}
 
     def odom(msg):
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
@@ -35,6 +37,9 @@ def main():
                      w=msg.twist.twist.angular.z,
                      tilt_deg=math.degrees(max(abs(roll), abs(pitch))))
         samples.append(dict(wall=time.monotonic(), **state))
+        if state['tilt_deg'] > 5.0 or abs(p.x) > 20 or abs(p.y) > 20 or p.z > .3:
+            if not instability:
+                instability.update(state)
 
     node.create_subscription(Odometry, '/odom', odom, qos_profile_sensor_data)
     node.create_subscription(Twist, '/cmd_vel',
@@ -58,6 +63,17 @@ def main():
             raise TimeoutError('Navigation response timed out')
         return future.result()
 
+    def check_motion(name, handle):
+        if not instability:
+            return
+        (args.output/(name+'.json')).write_text(json.dumps(samples, indent=2)+'\n')
+        (args.output/'instability.json').write_text(json.dumps(instability, indent=2)+'\n')
+        handle.cancel_goal_async()
+        print('ABORT_INSTABILITY', instability, flush=True)
+        subprocess.run(['python3', str(Path(__file__).resolve().parent/'project_launcher.py'),
+                        'stop'], check=True, timeout=30)
+        raise RuntimeError('Motion probe aborted for instability')
+
     try:
         assert client.wait_for_server(timeout_sec=20), 'Nav2 missing'
         until = time.monotonic()+15
@@ -80,6 +96,7 @@ def main():
             until = began+90
             while not result.done() and time.monotonic()<until:
                 rclpy.spin_once(node, timeout_sec=.05)
+                check_motion(name, handle)
             if not result.done():
                 wait(handle.cancel_goal_async(), 5)
                 raise TimeoutError(name)
@@ -87,6 +104,7 @@ def main():
             settle = time.monotonic()+1.5
             while time.monotonic()<settle:
                 rclpy.spin_once(node, timeout_sec=.05)
+                check_motion(name, handle)
             peak = max(s['v'] for s in samples)
             accelerating = [s for s in samples if s['v']>=peak*.9] if peak>.2 else []
             summaries[name] = dict(status=result.result().status, wall_seconds=wall_seconds,
