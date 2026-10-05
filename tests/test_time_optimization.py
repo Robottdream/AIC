@@ -6,8 +6,10 @@ from collections import deque
 from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
+import copy
+import time
 
-ROOT = Path(__file__).resolve().parents[1] / '源码（国赛）/src'
+ROOT = Path(__file__).resolve().parents[1] / 'src'
 
 
 def methods(relative, class_name, names):
@@ -15,7 +17,7 @@ def methods(relative, class_name, names):
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == class_name)
     cls.bases = []
     cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in names]
-    ns = dict(math=math, json=json, String=lambda **kw: NS(**kw))
+    ns = dict(math=math, json=json, copy=copy, time=time, String=lambda **kw: NS(**kw))
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(relative), 'exec'), ns)
     return ns[class_name]
 
@@ -102,6 +104,7 @@ class TimingTests(unittest.TestCase):
         node = C()
         node.current_task = 'grab'
         node.is_executing = True
+        node._stop_alignment = lambda: None
         node.get_logger = lambda: NS(info=lambda *_: None, error=lambda *_: None)
         messages = []
         node.arm_status_pub = NS(publish=lambda msg: messages.append((msg.data, node.is_executing)))
@@ -111,6 +114,46 @@ class TimingTests(unittest.TestCase):
         node.detach_attempts = 3
         node._detach_done_cb(NS(result=lambda: NS(success=False, message='failure')), lambda: None)
         self.assertEqual(messages[-1], ('place_failed', False))
+
+    def release_node(self, snapshot_x=3.14, snapshot_y=-5.81, snapshot_cube='red_cube_2', age=0):
+        C = methods('arm_action_integration/arm_action_integration/arm_grab_place_node.py',
+                    'ArmGrabPlaceNode', {'_on_released_cube_pose'})
+        C._on_released_cube_pose.__globals__['SetEntityState'] = NS(Request=lambda: NS())
+        node = C()
+        node.ZONES = {0: (3.143086, -5.807858)}
+        node.target_area = 0
+        node.is_executing = True
+        node.validated_release_pose = (snapshot_cube,
+            NS(position=NS(x=snapshot_x, y=snapshot_y, z=.7)), time.monotonic()-age)
+        node.get_logger = lambda: NS(warn=lambda *_: None, error=lambda *_: None)
+        messages, requests = [], []
+        node.arm_status_pub = NS(publish=lambda msg: messages.append(msg.data))
+        node.set_state_client = NS(call_async=lambda request:
+            (requests.append(request) or NS(add_done_callback=lambda *_: None)))
+        # The detach response can arrive after an impulse has moved the cube.
+        state = NS(pose=NS(position=NS(x=10., y=10., z=2.)),
+                   twist=NS(linear=NS(x=40., y=0., z=1.), angular=NS(x=1., y=2., z=3.)))
+        future = NS(result=lambda: NS(success=True, state=state))
+        return node, future, requests, messages
+
+    def test_release_preserves_validated_pose_after_constraint_impulse(self):
+        node, future, requests, messages = self.release_node()
+        node._on_released_cube_pose(future, 'red_cube_2', lambda: None)
+        self.assertEqual(messages, [])
+        self.assertEqual(len(requests), 1)
+        state = requests[0].state
+        self.assertAlmostEqual(state.pose.position.x, 3.14)
+        self.assertAlmostEqual(state.pose.position.y, -5.81)
+        self.assertAlmostEqual(state.pose.position.z, .035)
+        self.assertEqual((state.twist.linear.x, state.twist.angular.z), (0., 0.))
+
+    def test_release_rejects_invalid_or_stale_snapshot(self):
+        for kwargs in ({'snapshot_x': 4.}, {'snapshot_cube': 'red_cube_1'}, {'age': 3.}):
+            with self.subTest(**kwargs):
+                node, future, requests, messages = self.release_node(**kwargs)
+                node._on_released_cube_pose(future, 'red_cube_2', lambda: None)
+                self.assertEqual(requests, [])
+                self.assertEqual(messages, ['place_lost'])
 
     def test_release_rechecks_and_cancels_on_new_goal(self):
         C = methods('nav_simple/nav_simple/simple_navigator.py', 'SimpleNav2Navigator',
