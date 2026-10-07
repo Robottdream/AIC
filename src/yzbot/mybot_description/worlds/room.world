@@ -3992,8 +3992,7 @@
     <kinematic>0</kinematic>
   </link>
   <plugin name='simple_move_plugin2' filename='libsimple_move_plugin.so'>
-    <speed>0.35</speed>       <!-- 限制移动障碍物的碰撞速度 -->
-    <force>10.0</force>       <!-- 比原来15N更低的最大推力 -->
+    <speed>0.35</speed>       <!-- 移动障碍物的目标速度 (m/s) -->
     <start_x>-9.0</start_x>   <!-- 起点X坐标 -->
     <start_y>-4.2</start_y>   <!-- 起点Y坐标 -->
     <end_x>-5.0</end_x>       <!-- 终点X坐标 -->
@@ -4056,8 +4055,7 @@
     <kinematic>0</kinematic>
   </link>
   <plugin name='simple_move_plugin3' filename='libsimple_move_plugin.so'>
-    <speed>0.35</speed>       <!-- 限制移动障碍物的碰撞速度 -->
-    <force>10.0</force>       <!-- 比原来15N更低的最大推力 -->
+    <speed>0.35</speed>       <!-- 移动障碍物的目标速度 (m/s) -->
     <start_x>-2.5</start_x>   <!-- 起点X坐标 -->
     <start_y>3.0</start_y>    <!-- 起点Y坐标 -->
     <end_x>-2.5</end_x>       <!-- 终点X坐标 -->

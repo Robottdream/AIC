@@ -29,3 +29,10 @@ runtime/
 /*.pdf
 /*.docx
 /*.txt
+
+# Local model weights
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth
