@@ -1495,7 +1495,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>-12.461223862442065 4.343232825647324 0 0 0 -0.006156329724651646</pose>
+        <pose>-12.461223867901888 4.331931329650576 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -1582,7 +1582,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>-10.522121683089166 -1.4938154642016526 0 0 0 -0.006156329724651646</pose>
+        <pose>-10.52326350688892 -1.7680915085717706 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -1669,7 +1669,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>11.267440420736651 -11.378145655141152 0 0 0 0.2721433292804598</pose>
+        <pose>11.26761802771101 -11.378782120712913 0 0 0 0.2721433292804598</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -1756,7 +1756,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>-4.225119569304818 -14.182822099040939 0 0 0 -0.006156329724651646</pose>
+        <pose>-4.225119465115612 -14.161613276317903 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -1843,7 +1843,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>13.624388263461181 -14.317711416725022 0 0 0 -0.006156329724651646</pose>
+        <pose>13.553648690360145 -14.161660453875548 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -1930,7 +1930,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>0.021455553760866407 1.4913317768197842 0 0 0 -0.096816216925397</pose>
+        <pose>0.021456298749820094 1.7749987186871694 0 0 0 -0.096816216925397</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2017,7 +2017,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>13.64758252356907 1.6324480503868328 0 0 0 -0.006156329724651646</pose>
+        <pose>13.553866008191092 1.7320403491132759 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2104,7 +2104,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>-4.434395953333642 -3.506331411783828 0 0 0 -0.006156329724651646</pose>
+        <pose>-4.230370051314318 -3.5075874929141615 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2191,7 +2191,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>4.761735930894771 -4.162957917399933 0 0 0 -0.006156329724651646</pose>
+        <pose>4.761735597909215 -4.285690485952344 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2278,7 +2278,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>6.4921565447463365 -7.348671259676287 0 0 0 -0.006156329724651646</pose>
+        <pose>6.492156537364326 -7.170561329650576 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2365,7 +2365,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>-0.03287371287421652 -7.333500988212477 0 0 0 0.2853004647532156</pose>
+        <pose>-0.08774192949004414 -7.146430199264699 0 0 0 0.2853004647532156</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2452,7 +2452,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>-15.035513698951899 -7.716147624344386 0 0 0 -0.006156329724651646</pose>
+        <pose>-14.940282412865823 -7.662021329650577 0 0 0 -0.006156329724651646</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2539,7 +2539,7 @@
           </inertia>
           <pose>0 0 0 0 -0 0</pose>
         </inertial>
-        <pose>-12.30326514798727 -10.608022942498971 0 0 0 -0.25113499285151586</pose>
+        <pose>-12.28829618510868 -10.549676055306778 0 0 0 -0.25113499285151586</pose>
         <visual name="visual">
           <pose>0 0 0 0 -0 0</pose>
           <geometry>
@@ -2954,7 +2954,7 @@
         <visual name="visual">
           <geometry>
             <box>
-              <size>2.0 1.6 0.02</size>
+              <size>1.0 0.5 0.02</size>
             </box>
           </geometry>
           <material>
@@ -3013,7 +3013,7 @@
         <visual name="visual">
           <geometry>
             <box>
-              <size>2.0 1.6 0.02</size>
+              <size>1.0 0.5 0.02</size>
             </box>
           </geometry>
           <material>
@@ -3114,7 +3114,7 @@
         <visual name="visual">
           <geometry>
             <box>
-              <size>2.0 1.6 0.02</size>
+              <size>1.0 0.5 0.02</size>
             </box>
           </geometry>
           <material>
@@ -3226,7 +3226,7 @@
       </plugin>
     </model>
     <model name="design_obstacle_right">
-      <pose>-5.6 -7.06 0.25 0 0 0</pose>
+      <pose>-4.0 -6.9 0.25 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <laser_retro>180</laser_retro>
@@ -3278,10 +3278,10 @@
       </link>
       <plugin name="move_design_obstacle_right" filename="libsimple_move_plugin.so">
         <speed>0.35</speed>
-        <start_x>-5.6</start_x>
-        <start_y>-7.06</start_y>
-        <end_x>-1.45</end_x>
-        <end_y>-7.06</end_y>
+        <start_x>-4.0</start_x>
+        <start_y>-6.9</start_y>
+        <end_x>-0.3</end_x>
+        <end_y>-4.3</end_y>
       </plugin>
     </model>
     <plugin name="gazebo_link_attacher" filename="libgazebo_link_attacher.so" />

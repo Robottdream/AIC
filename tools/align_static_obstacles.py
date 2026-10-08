@@ -9,13 +9,51 @@ import numpy as np
 from PIL import Image
 import yaml
 from scipy.ndimage import distance_transform_edt, map_coordinates, label
-from scipy.optimize import differential_evolution, linear_sum_assignment
+from scipy.optimize import differential_evolution, linear_sum_assignment, minimize
 from scipy.spatial import ConvexHull
-from design_short_map import walls
+from design_short_map import walls, corners, rectangle_distance
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'scenarios/usb_office_20261007/original'
 OUT = ROOT / 'scenarios/short_routes_20261007/static_obstacles_from_map.json'
+WALL_GAP = 0.10
+
+
+def separating_gap(box, wall):
+    """Signed SAT gap: negative when two full collision rectangles overlap."""
+    axes = np.array([(math.cos(angle), math.sin(angle)) for angle in
+        (box['yaw'], box['yaw']+math.pi/2, wall['yaw'], wall['yaw']+math.pi/2)])
+    first = np.array(corners(box)) @ axes.T
+    second = np.array(corners(wall)) @ axes.T
+    return max(np.max(second.min(0)-first.max(0)),
+               np.max(first.min(0)-second.max(0)))
+
+
+def clear_walls(box, wall_boxes):
+    """Minimally shift an image-derived full box clear of physical walls."""
+    origin = np.array([box['x'], box['y']])
+    nearby = [wall for wall in wall_boxes
+              if rectangle_distance(corners(box), corners(wall)) < 1.8]
+    def constraints(point):
+        candidate = dict(box, x=float(point[0]), y=float(point[1]))
+        return np.array([separating_gap(candidate, wall)-WALL_GAP for wall in nearby])
+    if not nearby or min(constraints(origin)) >= 0:
+        return
+    solutions = []
+    for angle in np.linspace(0, 2*math.pi, 12, endpoint=False):
+        start = origin + .4*np.array([math.cos(angle), math.sin(angle)])
+        result = minimize(lambda point: np.sum((point-origin)**2), start,
+            method='SLSQP', bounds=[(value-.8, value+.8) for value in origin],
+            constraints={'type': 'ineq', 'fun': constraints},
+            options={'ftol': 1e-12, 'maxiter': 120})
+        if min(constraints(result.x)) >= -1e-7:
+            solutions.append(result)
+    if not solutions:
+        raise RuntimeError(f"Cannot separate {box['link']} from walls")
+    result = min(solutions, key=lambda item: item.fun)
+    box['image_recovered_local_center'] = origin.tolist()
+    box['x'], box['y'] = map(float, result.x)
+    box['wall_clearance_shift_m'] = float(math.sqrt(result.fun))
 
 
 def main():
@@ -88,11 +126,14 @@ def main():
         box = original_boxes[row]
         recovered.append(dict(link=box['link'], **detections[col], length=box['length'],
             width=box['width'], height=box['height']))
+    for box in recovered:
+        clear_walls(box, wall_boxes)
     data = dict(source_pgm='scenarios/usb_office_20261007/original/mapn3.pgm',
         source_sha256=hashlib.sha256((SOURCE/'mapn3.pgm').read_bytes()).hexdigest(),
         local_sdf_to_image_transform=[float(dx),float(dy),float(rotation)],
         wall_alignment_trimmed_rms_m=rms, count=len(recovered), boxes=recovered,
-        note='PGM positions/orientations recovered at 0.05m resolution; box dimensions remain 1m.')
+        minimum_static_wall_gap_m=WALL_GAP,
+        note='PGM poses recovered at 0.05m resolution; full 1m boxes minimally shifted for 0.10m wall clearance.')
     OUT.write_text(json.dumps(data, indent=2)+'\n')
     print(f'Extracted {len(recovered)} boxes; wall alignment RMS {rms:.4f}m; {OUT}')
 

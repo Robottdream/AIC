@@ -21,10 +21,13 @@ BLUE = [(-9.5, 0.0), (-8.5, -4.5), (-3.5, -12.7), (11.0, -9.5), (8.5, -2.5)]
 CARGO_MIN_EDGE_GAP = 2.0
 CARGO_DESIGN_CENTER_GAP = 3.5
 ZONES = {'A': (-7.4, -5.4), 'B': (7.5, -5.4), 'C': (-2.25, 3.1)}
-ZONE_SIZE = (2.0, 1.6)
+# Match the A/B/C base visuals in the original USB offic_room.world.
+# Used by the scene, arm release checks, benchmark checks, and layout preview.
+ZONE_SIZE = (1.0, 0.5)
 OBSTACLES = [
     dict(name='design_obstacle_left', start=(-3.65, 1.0), end=(-1.4, 1.0), size=0.5, height=0.5, shape='box', speed=0.35),
-    dict(name='design_obstacle_right', start=(-5.6, -7.06), end=(-1.45, -7.06), size=0.5, height=0.5, shape='box', speed=0.35, min_wall_clearance=0.4),
+    # Travel diagonally through the middle clearing, southwest to northeast.
+    dict(name='design_obstacle_right', start=(-4.0, -6.9), end=(-0.3, -4.3), size=0.5, height=0.5, shape='box', speed=0.35, min_wall_clearance=0.4),
 ]
 RESOLUTION = 0.05
 ORIGIN = (-16.0, -16.0)
@@ -177,6 +180,15 @@ def main():
     static_boxes = list(walls(static_obstacles))
     if len(static_boxes) != 13:
         raise RuntimeError(f'Expected 13 imported boxes, got {len(static_boxes)}')
+    static_wall_clearances = {
+        box['link']: min(rectangle_distance(corners(box), corners(wall)) for wall in wall_boxes)
+        for box in static_boxes}
+    for name, gap in static_wall_clearances.items():
+        if gap < .10 - 1e-6:
+            raise RuntimeError(f'Static box too close to wall: {name}, gap={gap:.4f}m; rerun align_static_obstacles.py')
+    for first, second in itertools.combinations(static_boxes, 2):
+        if rectangle_distance(corners(first), corners(second)) <= 0:
+            raise RuntimeError(f"Static boxes overlap: {first['link']}/{second['link']}")
     im = Image.new('L', SIZE, 205)
     draw = ImageDraw.Draw(im)
     # Interior bounds from the imported office's outer walls.
@@ -294,6 +306,7 @@ def main():
         obstacles=OBSTACLES, wall_boxes=wall_boxes, static_boxes=static_boxes,
         static_obstacle_geometry_preserved_from_local_usb_original=True, static_obstacle_count=len(static_boxes), static_obstacle_color="orange",
         static_obstacle_poses_from_original_pgm=True, static_image_alignment=alignment,
+        min_static_obstacle_surface_to_wall_m=static_wall_clearances,
         reachable_grasp_poses=grasp_checks,
         static_clearance_gate_m=0.48, walls_preserved_from_local_usb_original=True,
         min_grasp_track_center_distance_m=grasp_track_distances,
