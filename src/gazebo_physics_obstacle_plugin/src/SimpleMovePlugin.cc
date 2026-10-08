@@ -19,7 +19,6 @@ namespace gazebo
         
         // 运动参数
         double speed;
-        double force;
         double start_x;
         double start_y;
         double end_x;
@@ -54,7 +53,6 @@ namespace gazebo
             
             // 读取参数
             this->speed = _sdf->Get<double>("speed", 0.5).first;
-            this->force = _sdf->Get<double>("force", 10.0).first;
             
             // 读取起点和终点
             this->start_x = _sdf->Get<double>("start_x", 0.0).first;
@@ -67,15 +65,12 @@ namespace gazebo
             // 输出参数信息
             std::cout << this->log_prefix << "Parameters:" << std::endl;
             std::cout << this->log_prefix << "  Speed: " << this->speed << " m/s" << std::endl;
-            std::cout << this->log_prefix << "  Force: " << this->force << " N" << std::endl;
             std::cout << this->log_prefix << "  Path: (" << this->start_x << "," << this->start_y 
                       << ") -> (" << this->end_x << "," << this->end_y << ")" << std::endl;
             
             // 设置阻尼
-            // ODE damping is a per-step fraction in [0, 1], not a viscous coefficient.
-            // 2.0 reverses angular velocity every step and destabilizes contacts.
-            this->link->SetLinearDamping(0.001);
-            this->link->SetAngularDamping(0.01);
+            this->link->SetLinearDamping(0.2);
+            this->link->SetAngularDamping(2.0);
             
             // 初始化ROS 2
             this->InitROS(model_name);
@@ -151,8 +146,7 @@ namespace gazebo
                 double dir_x = dx / distance;
                 double dir_y = dy / distance;
                 
-                // 用有限推力闭环控制速度，并把被碰撞推离轨道的物块拉回轨道。
-                // 固定推力会在接触墙/车时持续蓄力，造成物理求解器弹飞。
+                // 沿往返轨道设定目标速度；偏离轨道后逐步修正方向。
                 double path_dx = this->end_x - this->start_x;
                 double path_dy = this->end_y - this->start_y;
                 double path_len_sq = path_dx * path_dx + path_dy * path_dy;
@@ -166,26 +160,24 @@ namespace gazebo
                     nearest_x += t * path_dx;
                     nearest_y += t * path_dy;
                 }
-                double target_speed = std::min(this->speed, 2.0 * distance);
+                double target_speed = std::min(this->speed, distance);
                 double desired_vx = dir_x * target_speed +
                     std::max(-0.25, std::min(0.25, (nearest_x - current_x) * 0.8));
                 double desired_vy = dir_y * target_speed +
                     std::max(-0.25, std::min(0.25, (nearest_y - current_y) * 0.8));
-                // A 0.3 kg obstacle must yield on contact rather than act as a ram.
-                double fx = 12.0 * (desired_vx - linear_vel.X());
-                double fy = 12.0 * (desired_vy - linear_vel.Y());
-                double magnitude = std::hypot(fx, fy);
-                if (magnitude > this->force && magnitude > 0.0)
+                // Prescribe the configured horizontal speed. The old 10 N force
+                // controller was limited by ground contact to about 0.1 m/s.
+                double commanded_speed = std::hypot(desired_vx, desired_vy);
+                if (commanded_speed > this->speed && commanded_speed > 0.0)
                 {
-                    fx *= this->force / magnitude;
-                    fy *= this->force / magnitude;
+                    desired_vx *= this->speed / commanded_speed;
+                    desired_vy *= this->speed / commanded_speed;
                 }
-                ignition::math::Vector3d center_of_mass = this->link->GetInertial()->Pose().Pos();
-                this->link->AddForceAtRelativePosition(
-                    ignition::math::Vector3d(fx, fy, 0.0), center_of_mass);
+                this->link->SetLinearVel(ignition::math::Vector3d(desired_vx, desired_vy, 0.0));
+                this->link->SetAngularVel(ignition::math::Vector3d::Zero);
 
-                // 定期输出状态
                 double current_time = _info.simTime.Double();
+                // 定期输出状态
                 
                 if (current_time - this->last_print_time >= 1.0)
                 {

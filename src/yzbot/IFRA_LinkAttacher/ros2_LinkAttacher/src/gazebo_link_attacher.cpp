@@ -29,6 +29,8 @@
 */
 
 #include <gazebo/common/Plugin.hh>
+#include <gazebo/common/Events.hh>
+#include <gazebo/common/Event.hh>
 #include <gazebo/physics/Entity.hh>
 #include <gazebo/physics/Light.hh>
 #include <gazebo/physics/Link.hh>
@@ -40,7 +42,6 @@
 #include <memory>
 #include <cmath>
 #include <algorithm>
-#include <gazebo/common/Events.hh>
 #include <atomic>
 #include <chrono>
 #include <deque>
@@ -84,44 +85,23 @@ public:
     linkattacher_msgs::srv::DetachLink::Request::SharedPtr _req,
     linkattacher_msgs::srv::DetachLink::Response::SharedPtr _res);
 
-  // ROS requests are submitted here; only the Gazebo update thread changes
-  // joint topology and model poses. Do not hold the physics mutex from a ROS
-  // callback: model pose updates acquire other Gazebo locks in a different order.
-  void OnUpdate();
-  template<typename Response, typename Operation>
-  void Submit(std::shared_ptr<Response> response, Operation operation)
+  void AttachOnUpdate(
+    linkattacher_msgs::srv::AttachLink::Request::SharedPtr request,
+    linkattacher_msgs::srv::AttachLink::Response::SharedPtr response);
+  void DetachOnUpdate(
+    linkattacher_msgs::srv::DetachLink::Request::SharedPtr request,
+    linkattacher_msgs::srv::DetachLink::Response::SharedPtr response);
+  bool DispatchToUpdate(std::function<void()> action);
+  void OnWorldUpdate();
+
+  struct PendingOperation
   {
-    auto promise = std::make_shared<std::promise<Response>>();
-    auto pending = std::make_shared<std::atomic<bool>>(true);
-    auto future = promise->get_future();
-    {
-      std::lock_guard<std::mutex> lock(queue_mutex_);
-      pending_.emplace_back([promise, pending, operation]() {
-        if (!pending->exchange(false)) return;
-        Response result;
-        try {
-          operation(result);
-        } catch (const std::exception &error) {
-          result.success = false;
-          result.message = std::string("Gazebo attachment error: ") + error.what();
-        }
-        promise->set_value(std::move(result));
-      });
-    }
-    if (future.wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
-      *response = future.get();
-    } else {
-      pending->store(false);
-      response->success = false;
-      response->message = "Gazebo update thread did not process the attachment request within 5 s";
-    }
-  }
-  void AttachImpl(linkattacher_msgs::srv::AttachLink::Request::SharedPtr request,
-                  linkattacher_msgs::srv::AttachLink::Response &response);
-  void DetachImpl(linkattacher_msgs::srv::DetachLink::Request::SharedPtr request,
-                  linkattacher_msgs::srv::DetachLink::Response &response);
-  std::mutex queue_mutex_;
-  std::deque<std::function<void()>> pending_;
+    std::function<void()> action;
+    std::promise<void> done;
+    std::atomic<bool> cancelled{false};
+  };
+  std::mutex pending_mutex_;
+  std::deque<std::shared_ptr<PendingOperation>> pending_;
   gazebo::event::ConnectionPtr update_connection_;
 
   // World pointer from Gazebo.
@@ -146,6 +126,7 @@ GazeboLinkAttacher::GazeboLinkAttacher()
 
 GazeboLinkAttacher::~GazeboLinkAttacher()
 {
+  impl_->update_connection_.reset();
 }
 
 void GazeboLinkAttacher::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf)
@@ -153,8 +134,11 @@ void GazeboLinkAttacher::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr 
   
   // Gazebo WORLD:
   impl_->world_ = _world;
+
+  // Apply joint and model changes in Gazebo's update thread. Calling them
+  // directly from ROS service threads can race ODE and crash gzserver.
   impl_->update_connection_ = gazebo::event::Events::ConnectWorldUpdateBegin(
-    std::bind(&GazeboLinkAttacherPrivate::OnUpdate, impl_.get()));
+    [this](const gazebo::common::UpdateInfo &) {impl_->OnWorldUpdate();});
 
   // ROS2 NODE:
   impl_->ros_node_ = gazebo_ros::Node::Get(_sdf);
@@ -173,45 +157,71 @@ void GazeboLinkAttacher::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr 
 
 }
 
-void GazeboLinkAttacherPrivate::OnUpdate()
+bool GazeboLinkAttacherPrivate::DispatchToUpdate(std::function<void()> action)
 {
-  std::deque<std::function<void()>> jobs;
+  auto operation = std::make_shared<PendingOperation>();
+  operation->action = std::move(action);
+  auto future = operation->done.get_future();
   {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    jobs.swap(pending_);
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    pending_.push_back(operation);
   }
-  for (auto &job : jobs) job();
+  if (future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+    operation->cancelled.store(true);
+    return false;
+  }
+  return true;
+}
+
+void GazeboLinkAttacherPrivate::OnWorldUpdate()
+{
+  std::shared_ptr<PendingOperation> operation;
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    if (pending_.empty()) return;
+    operation = pending_.front();
+    pending_.pop_front();
+  }
+  if (!operation->cancelled.load()) operation->action();
+  operation->done.set_value();
 }
 
 void GazeboLinkAttacherPrivate::Attach(
   linkattacher_msgs::srv::AttachLink::Request::SharedPtr request,
   linkattacher_msgs::srv::AttachLink::Response::SharedPtr response)
 {
-  Submit(response, [this, request](linkattacher_msgs::srv::AttachLink::Response &result) {
-    AttachImpl(request, result);
-  });
+  if (!DispatchToUpdate([this, request, response]() {
+      AttachOnUpdate(request, response);
+    })) {
+    response->success = false;
+    response->message = "Gazebo update timed out while attaching";
+  }
 }
 
 void GazeboLinkAttacherPrivate::Detach(
   linkattacher_msgs::srv::DetachLink::Request::SharedPtr request,
   linkattacher_msgs::srv::DetachLink::Response::SharedPtr response)
 {
-  Submit(response, [this, request](linkattacher_msgs::srv::DetachLink::Response &result) {
-    DetachImpl(request, result);
-  });
+  if (!DispatchToUpdate([this, request, response]() {
+      DetachOnUpdate(request, response);
+    })) {
+    response->success = false;
+    response->message = "Gazebo update timed out while detaching";
+  }
 }
 
-void GazeboLinkAttacherPrivate::AttachImpl(
+void GazeboLinkAttacherPrivate::AttachOnUpdate(
   linkattacher_msgs::srv::AttachLink::Request::SharedPtr _req,
-  linkattacher_msgs::srv::AttachLink::Response &_res)
+  linkattacher_msgs::srv::AttachLink::Response::SharedPtr _res)
 {
+
   // CHECK if -> Joint already exists in GV_joints:
   /* THIS IS NO LONGER NEEDED, SINCE THE JOINT IS REMOVED AFTER DETACHING!
   JointSTRUCT j;
   if (this->getJoint(_req->model1_name, _req->link1_name, _req->model2_name, _req->link2_name, j)){
     j.joint->Attach(j.l1, j.l2);
-    _res.success = true;
-    _res.message = "ATTACHED: {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
+    _res->success = true;
+    _res->message = "ATTACHED: {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
     return;
   }
   */
@@ -219,44 +229,49 @@ void GazeboLinkAttacherPrivate::AttachImpl(
   // Get the first link:
   gazebo::physics::ModelPtr model1 = world_->ModelByName(_req->model1_name);
   if (!model1) {
-    _res.success = false;
-    _res.message = "Failed to find model with name: " + _req->model1_name;
+    _res->success = false;
+    _res->message = "Failed to find model with name: " + _req->model1_name;
     return;
   }
   gazebo::physics::LinkPtr link1 = model1->GetLink(_req->link1_name);
   if (!link1) {
-    _res.success = false;
-    _res.message = "Failed to find link with name: " + _req->link1_name;
+    _res->success = false;
+    _res->message = "Failed to find link with name: " + _req->link1_name;
     return;
   }
 
   // Get the second link:
   gazebo::physics::ModelPtr model2 = world_->ModelByName(_req->model2_name);
   if (!model2) {
-    _res.success = false;
-    _res.message = "Failed to find model with name: " + _req->model2_name;
+    _res->success = false;
+    _res->message = "Failed to find model with name: " + _req->model2_name;
     return;
   }
   gazebo::physics::LinkPtr link2 = model2->GetLink(_req->link2_name);
   if (!link2) {
-    _res.success = false;
-    _res.message = "Failed to find link with name: " + _req->link2_name;
+    _res->success = false;
+    _res->message = "Failed to find link with name: " + _req->link2_name;
     return;
   }
 
   if (IsAttached == true){
 
-    _res.success = false;
-    _res.message = "Both links have already been attached, aborting new attachment.";
+    _res->success = false;
+    _res->message = "Both links have already been attached, aborting new attachment.";
 
   } else {
 
     // Create a fixed joint between the two links:
     JointName = _req->model1_name + "_" + _req->link1_name + "_" + _req->model2_name + "_" + _req->link2_name + "_joint";
-    link2->SetKinematic(false);
+    // The carried block must be rigidly attached to the gripper. A revolute
+    // joint with zero limits is not a fixed joint, and axis 1 does not exist
+    // on a one-DOF joint (Gazebo reported SetDamping out of bounds).
     gazebo::physics::JointPtr joint = model1->CreateJoint(JointName, "fixed", link1, link2);
+    joint->Attach(link1, link2);
     joint->Load(link1, link2, ignition::math::Pose3d());
+    joint->SetProvideFeedback(true);
     joint->Init();
+    model1->Update();
 
     GV_jointSTR.model1 = _req->model1_name;
     GV_jointSTR.model2 = _req->model2_name;
@@ -271,8 +286,8 @@ void GazeboLinkAttacherPrivate::AttachImpl(
     GV_joints.push_back(GV_jointSTR);
 
     // Set the success and message in the response:
-    _res.success = true;
-    _res.message = "ATTACHED: {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
+    _res->success = true;
+    _res->message = "ATTACHED: {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
 
     IsAttached = true;
 
@@ -280,21 +295,26 @@ void GazeboLinkAttacherPrivate::AttachImpl(
 
 }
 
-void GazeboLinkAttacherPrivate::DetachImpl(
+void GazeboLinkAttacherPrivate::DetachOnUpdate(
   linkattacher_msgs::srv::DetachLink::Request::SharedPtr _req,
-  linkattacher_msgs::srv::DetachLink::Response &_res)
+  linkattacher_msgs::srv::DetachLink::Response::SharedPtr _res)
 {
+
   // CHECK if -> Joint already exists in GV_joints:
   JointSTRUCT j;
   if (this->getJoint(_req->model1_name, _req->link1_name, _req->model2_name, _req->link2_name, j)){
     j.joint->Detach();
-    _res.success = true;
-    _res.message = "DETACHED: {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
+    _res->success = true;
+    _res->message = "DETACHED: {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
     
     // (+) Remove joint --> This fixes the following problem: If the object to be attached is removed and spawned again, 
     // gazebo breaks when attaching it again, since the joint already existed. Joint must be REMOVED when detaching.
-    gazebo::physics::ModelPtr model1 = world_->ModelByName(_req->model1_name);
-    model1->RemoveJoint(JointName);
+    const std::string joint_name = j.joint->GetName();
+    j.m1->RemoveJoint(joint_name);
+    GV_joints.erase(std::remove_if(GV_joints.begin(), GV_joints.end(),
+      [&j](const JointSTRUCT &entry) {
+        return entry.joint == j.joint;
+      }), GV_joints.end());
 
     // A fixed-joint simulation can occasionally put a tiny cube far from the
     // gripper. Correct an implausible release pose before freezing the cube.
@@ -310,17 +330,12 @@ void GazeboLinkAttacherPrivate::DetachImpl(
     j.l2->SetAngularVel(ignition::math::Vector3d::Zero);
     j.l2->SetKinematic(true);
 
-    // Remove the detached record as well as the Gazebo joint. Repeated
-    // DETACHLINK calls must not reuse a removed joint pointer.
-    GV_joints.erase(std::remove_if(GV_joints.begin(), GV_joints.end(),
-      [&j](const JointSTRUCT &item) { return item.joint == j.joint; }),
-      GV_joints.end());
     IsAttached = false;
     
     return;
   } else {
-    _res.success = false;
-    _res.message = "DETACHED -- ERROR (Joint does not exist!): {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
+    _res->success = false;
+    _res->message = "DETACHED -- ERROR (Joint does not exist!): {MODEL , LINK} -> {" + _req->model1_name + " , " + _req->link1_name + "} -- {" + _req->model2_name + " , " + _req->link2_name + "}.";
   }
 
 }

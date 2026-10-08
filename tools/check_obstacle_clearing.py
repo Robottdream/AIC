@@ -38,14 +38,18 @@ def trial(node, enabled, folder, beams=361):
         yaml.safe_dump({'/**': {'ros__parameters': params}}, f)
         filename = f.name
     log = (folder / ('enabled.log' if enabled else 'baseline.log')).open('w')
+    env = os.environ.copy()
+    if env.get('AIC_TF2_FIX_LIB'):
+        env['LD_PRELOAD'] = env['AIC_TF2_FIX_LIB']
     process = subprocess.Popen(['/opt/ros/humble/lib/nav2_costmap_2d/nav2_costmap_2d',
         '--ros-args', '--params-file', filename,
         '-r', '/tf:=/ghost/tf', '-r', '/tf_static:=/ghost/tf_static'],
-        stdout=log, stderr=subprocess.STDOUT)
+        stdout=log, stderr=subprocess.STDOUT, env=env)
     qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
     tf_pub = node.create_publisher(TFMessage, '/ghost/tf_static', qos)
-    scan_pub = node.create_publisher(LaserScan, '/ghost/scan', 10)
+    scan_pub = node.create_publisher(LaserScan, '/ghost/scan',
+        QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
     maps = []
     sub = node.create_subscription(OccupancyGrid, '/costmap/costmap', maps.append, qos)
     client = node.create_client(ChangeState, '/costmap/costmap/change_state')
@@ -53,6 +57,7 @@ def trial(node, enabled, folder, beams=361):
         transform = TransformStamped()
         transform.header.frame_id = 'ghost_map'
         transform.child_frame_id = 'ghost_laser'
+        transform.transform.translation.z = .2
         transform.transform.rotation.w = 1.0
         tf_pub.publish(TFMessage(transforms=[transform]))
         assert client.wait_for_service(timeout_sec=15)
@@ -108,8 +113,13 @@ def trial(node, enabled, folder, beams=361):
                 and -2.5 < grid.info.origin.position.y+(iy+.5)*grid.info.resolution < 3.5)
             return {'old_obstacle': cost(2, 0), 'remaining_obstacle': cost(0, 2),
                     'corridor_lethal_cells': trail}
-        before = scan_for(2, True)
+        deadline = time.monotonic() + 15
+        while scan_pub.get_subscription_count() == 0 and time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=.1)
+        assert scan_pub.get_subscription_count(), 'Scan subscription not discovered'
+        before = scan_for(5, True)
         after = scan_for(2, False)
+        print('observations', before, after, flush=True)
         assert before['old_obstacle'] == 100, 'Initial obstacle not marked'
         assert after['remaining_obstacle'] == 100, 'Real obstacle erased'
         assert after['old_obstacle'] == (0 if enabled else 100), 'Unexpected clearing result'
@@ -136,7 +146,7 @@ def trial(node, enabled, folder, beams=361):
 
 
 def main():
-    folder = Path(__file__).resolve().parents[1]/'log/ghost-obstacles-20260930'
+    folder = Path(__file__).resolve().parents[1]/'log/ghost-obstacles-20261005'
     folder.mkdir(parents=True, exist_ok=True)
     if len(sys.argv) == 1:
         for flag in ('false', 'true', 'dense'):
@@ -148,6 +158,14 @@ def main():
     enabled = sys.argv[1] != 'false'
     # Separate DDS domains avoid cached lifecycle endpoints between trials.
     os.environ['ROS_DOMAIN_ID'] = str({'false': 83, 'true': 84, 'dense': 85}[sys.argv[1]])
+    os.environ['RMW_IMPLEMENTATION'] = 'rmw_cyclonedds_cpp'
+    os.environ['CYCLONEDDS_URI'] = '''<CycloneDDS><Domain id="any">
+      <General><Interfaces><NetworkInterface address="127.0.0.1"/></Interfaces>
+      <AllowMulticast>false</AllowMulticast><MaxMessageSize>1400B</MaxMessageSize>
+      <FragmentSize>1200B</FragmentSize></General>
+      <Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>128</MaxAutoParticipantIndex>
+      <Peers><Peer Address="127.0.0.1"/></Peers></Discovery>
+      </Domain></CycloneDDS>'''
     rclpy.init()
     node = rclpy.create_node('ghost_obstacle_test')
     try:

@@ -39,6 +39,24 @@ def main():
     draw = ImageDraw.Draw(image)
     origin_x, origin_y, _ = config["origin"]
     resolution = float(config["resolution"])
+
+    def map_polygon(x, y, yaw, length, width):
+        corners = []
+        for dx, dy in ((-length / 2, -width / 2),
+                       (length / 2, -width / 2),
+                       (length / 2, width / 2),
+                       (-length / 2, width / 2)):
+            px = x + dx * math.cos(yaw) - dy * math.sin(yaw)
+            py = y + dx * math.sin(yaw) + dy * math.cos(yaw)
+            corners.append(((px - origin_x) / resolution,
+                            image.height - 1 - (py - origin_y) / resolution))
+        return corners
+
+    # map.pgm still contains the original full-length Wall_81. Clear that
+    # footprint before painting the current Gazebo walls, or a phantom wall
+    # remains across the newly widened corridor.
+    draw.polygon(map_polygon(-5.10949, 3.25301, 0.275691,
+                             1.67974 + 0.12, 0.1 + 0.12), fill=254)
     world = ET.parse(WORLD).getroot()
     office = next(model for model in world.findall(".//world/model")
                   if model.get("name") == "PAL_office")
@@ -53,16 +71,7 @@ def main():
                 continue
             length, width, _ = map(float, size.split())
             center_x, center_y, yaw = compose(link_pose, pose(collision.findtext("pose")))
-            corners = []
-            for dx, dy in ((-length / 2, -width / 2),
-                           (length / 2, -width / 2),
-                           (length / 2, width / 2),
-                           (-length / 2, width / 2)):
-                x = center_x + dx * math.cos(yaw) - dy * math.sin(yaw)
-                y = center_y + dx * math.sin(yaw) + dy * math.cos(yaw)
-                corners.append(((x - origin_x) / resolution,
-                                image.height - 1 - (y - origin_y) / resolution))
-            draw.polygon(corners, fill=0)
+            draw.polygon(map_polygon(center_x, center_y, yaw, length, width), fill=0)
             wall_count += 1
 
     image.save(OUTPUT)

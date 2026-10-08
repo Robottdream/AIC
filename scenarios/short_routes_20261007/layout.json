@@ -1,0 +1,844 @@
+{
+  "rule_source": "\u6bd4\u8d5b\u89c4\u5219.docx embedded images 1-4",
+  "cargo": {
+    "red": [
+      [
+        -12.0,
+        2.5
+      ],
+      [
+        -12.0,
+        -6.5
+      ],
+      [
+        -7.0,
+        -12.0
+      ],
+      [
+        4.0,
+        -11.0
+      ],
+      [
+        11.5,
+        3.0
+      ]
+    ],
+    "blue": [
+      [
+        -9.5,
+        0.0
+      ],
+      [
+        -8.5,
+        -4.5
+      ],
+      [
+        -3.5,
+        -12.7
+      ],
+      [
+        11.0,
+        -9.5
+      ],
+      [
+        8.5,
+        -2.5
+      ]
+    ]
+  },
+  "zones": {
+    "A": [
+      -7.4,
+      -5.4
+    ],
+    "B": [
+      7.5,
+      -5.4
+    ],
+    "C": [
+      -2.25,
+      3.1
+    ]
+  },
+  "zone_size": [
+    2.0,
+    1.6
+  ],
+  "parking": [
+    [
+      -7.95,
+      -5.5600000000000005
+    ],
+    [
+      6.95,
+      -5.5
+    ],
+    [
+      -2.8,
+      3.1
+    ]
+  ],
+  "cargo_pair_distances": [
+    {
+      "first": "red_cube_1",
+      "second": "red_cube_2",
+      "center_m": 9.0,
+      "edge_m": 8.969999999999999
+    },
+    {
+      "first": "red_cube_1",
+      "second": "red_cube_3",
+      "center_m": 15.337861650177967,
+      "edge_m": 15.299732023797016
+    },
+    {
+      "first": "red_cube_1",
+      "second": "red_cube_4",
+      "center_m": 20.93442141545832,
+      "edge_m": 20.892146849952972
+    },
+    {
+      "first": "red_cube_1",
+      "second": "red_cube_5",
+      "center_m": 23.50531854708632,
+      "edge_m": 23.474705535959338
+    },
+    {
+      "first": "red_cube_1",
+      "second": "blue_cube_1",
+      "center_m": 3.5355339059327378,
+      "edge_m": 3.493107499061544
+    },
+    {
+      "first": "red_cube_1",
+      "second": "blue_cube_2",
+      "center_m": 7.826237921249264,
+      "edge_m": 7.786000256871303
+    },
+    {
+      "first": "red_cube_1",
+      "second": "blue_cube_3",
+      "center_m": 17.415223225672417,
+      "edge_m": 17.37440070908922
+    },
+    {
+      "first": "red_cube_1",
+      "second": "blue_cube_4",
+      "center_m": 25.942243542145693,
+      "edge_m": 25.90177214014516
+    },
+    {
+      "first": "red_cube_1",
+      "second": "blue_cube_5",
+      "center_m": 21.10094784600919,
+      "edge_m": 21.064705077451237
+    },
+    {
+      "first": "red_cube_2",
+      "second": "red_cube_3",
+      "center_m": 7.433034373659253,
+      "edge_m": 7.390656263147407
+    },
+    {
+      "first": "red_cube_2",
+      "second": "red_cube_4",
+      "center_m": 16.62077013859466,
+      "edge_m": 16.58378123348231
+    },
+    {
+      "first": "red_cube_2",
+      "second": "red_cube_5",
+      "center_m": 25.347583711273153,
+      "edge_m": 25.308532158147774
+    },
+    {
+      "first": "red_cube_2",
+      "second": "blue_cube_1",
+      "center_m": 6.96419413859206,
+      "edge_m": 6.925445834023972
+    },
+    {
+      "first": "red_cube_2",
+      "second": "blue_cube_2",
+      "center_m": 4.031128874149275,
+      "edge_m": 3.9902130268946787
+    },
+    {
+      "first": "red_cube_2",
+      "second": "blue_cube_3",
+      "center_m": 10.520931517693668,
+      "edge_m": 10.479017129483088
+    },
+    {
+      "first": "red_cube_2",
+      "second": "blue_cube_4",
+      "center_m": 23.194827009486403,
+      "edge_m": 23.161213267011725
+    },
+    {
+      "first": "red_cube_2",
+      "second": "blue_cube_5",
+      "center_m": 20.886598574205422,
+      "edge_m": 20.85142201385795
+    },
+    {
+      "first": "red_cube_3",
+      "second": "red_cube_4",
+      "center_m": 11.045361017187261,
+      "edge_m": 11.01280164172587
+    },
+    {
+      "first": "red_cube_3",
+      "second": "red_cube_5",
+      "center_m": 23.817010727629107,
+      "edge_m": 23.774814405164133
+    },
+    {
+      "first": "red_cube_3",
+      "second": "blue_cube_1",
+      "center_m": 12.257650672131263,
+      "edge_m": 12.222184747417295
+    },
+    {
+      "first": "red_cube_3",
+      "second": "blue_cube_2",
+      "center_m": 7.648529270389178,
+      "edge_m": 7.6132647399128315
+    },
+    {
+      "first": "red_cube_3",
+      "second": "blue_cube_3",
+      "center_m": 3.569313659514949,
+      "edge_m": 3.5340911137094357
+    },
+    {
+      "first": "red_cube_3",
+      "second": "blue_cube_4",
+      "center_m": 18.172781845386247,
+      "edge_m": 18.13895807371526
+    },
+    {
+      "first": "red_cube_3",
+      "second": "blue_cube_5",
+      "center_m": 18.179658962697843,
+      "edge_m": 18.138406765755363
+    },
+    {
+      "first": "red_cube_4",
+      "second": "red_cube_5",
+      "center_m": 15.88238017426859,
+      "edge_m": 15.841773890571723
+    },
+    {
+      "first": "red_cube_4",
+      "second": "blue_cube_1",
+      "center_m": 17.414074767267998,
+      "edge_m": 17.371868063049522
+    },
+    {
+      "first": "red_cube_4",
+      "second": "blue_cube_2",
+      "center_m": 14.089002803605371,
+      "edge_m": 14.048551526758905
+    },
+    {
+      "first": "red_cube_4",
+      "second": "blue_cube_3",
+      "center_m": 7.690253571892152,
+      "edge_m": 7.654397428929333
+    },
+    {
+      "first": "red_cube_4",
+      "second": "blue_cube_4",
+      "center_m": 7.158910531638177,
+      "edge_m": 7.123327873964527
+    },
+    {
+      "first": "red_cube_4",
+      "second": "blue_cube_5",
+      "center_m": 9.617692030835672,
+      "edge_m": 9.577149889189371
+    },
+    {
+      "first": "red_cube_5",
+      "second": "blue_cube_1",
+      "center_m": 21.213203435596427,
+      "edge_m": 21.179277608077193
+    },
+    {
+      "first": "red_cube_5",
+      "second": "blue_cube_2",
+      "center_m": 21.360009363293827,
+      "edge_m": 21.321393012652806
+    },
+    {
+      "first": "red_cube_5",
+      "second": "blue_cube_3",
+      "center_m": 21.713820483738,
+      "edge_m": 21.67140512288024
+    },
+    {
+      "first": "red_cube_5",
+      "second": "blue_cube_4",
+      "center_m": 12.509996003196804,
+      "edge_m": 12.478854114060312
+    },
+    {
+      "first": "red_cube_5",
+      "second": "blue_cube_5",
+      "center_m": 6.264982043070834,
+      "edge_m": 6.224291124296806
+    },
+    {
+      "first": "blue_cube_1",
+      "second": "blue_cube_2",
+      "center_m": 4.6097722286464435,
+      "edge_m": 4.5740354174404905
+    },
+    {
+      "first": "blue_cube_1",
+      "second": "blue_cube_3",
+      "center_m": 14.045995870709914,
+      "edge_m": 14.006062972869998
+    },
+    {
+      "first": "blue_cube_1",
+      "second": "blue_cube_4",
+      "center_m": 22.594247055390007,
+      "edge_m": 22.55441863582389
+    },
+    {
+      "first": "blue_cube_1",
+      "second": "blue_cube_5",
+      "center_m": 18.172781845386247,
+      "edge_m": 18.13895807371526
+    },
+    {
+      "first": "blue_cube_2",
+      "second": "blue_cube_3",
+      "center_m": 9.604165762834375,
+      "edge_m": 9.562938878817533
+    },
+    {
+      "first": "blue_cube_2",
+      "second": "blue_cube_4",
+      "center_m": 20.130822139197395,
+      "edge_m": 20.094322581266578
+    },
+    {
+      "first": "blue_cube_2",
+      "second": "blue_cube_5",
+      "center_m": 17.11724276862369,
+      "edge_m": 17.08396324041936
+    },
+    {
+      "first": "blue_cube_3",
+      "second": "blue_cube_4",
+      "center_m": 14.848905683584901,
+      "edge_m": 14.813163065328078
+    },
+    {
+      "first": "blue_cube_3",
+      "second": "blue_cube_5",
+      "center_m": 15.749285698088025,
+      "edge_m": 15.706998440185824
+    },
+    {
+      "first": "blue_cube_4",
+      "second": "blue_cube_5",
+      "center_m": 7.433034373659253,
+      "edge_m": 7.394714328491668
+    }
+  ],
+  "min_cargo_center_distance_m": 3.5355339059327378,
+  "min_cargo_edge_gap_m": 3.493107499061544,
+  "cargo_min_edge_gap_requirement_m": 2.0,
+  "obstacles": [
+    {
+      "name": "design_obstacle_left",
+      "start": [
+        -3.65,
+        1.0
+      ],
+      "end": [
+        -0.9,
+        1.0
+      ],
+      "size": 0.5,
+      "height": 0.5,
+      "shape": "box",
+      "speed": 0.35
+    },
+    {
+      "name": "design_obstacle_right",
+      "start": [
+        -5.6,
+        -7.06
+      ],
+      "end": [
+        2.7,
+        -7.06
+      ],
+      "size": 0.5,
+      "height": 0.5,
+      "shape": "box",
+      "speed": 0.35,
+      "min_wall_clearance": 0.4
+    }
+  ],
+  "wall_boxes": [
+    {
+      "link": "Wall_10",
+      "x": 14.231837,
+      "y": -4.914841,
+      "yaw": -1.57081,
+      "length": 20.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_107",
+      "x": -7.273433,
+      "y": -8.171759999999999,
+      "yaw": -3.08207,
+      "length": 3.27854,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_109",
+      "x": -13.381263,
+      "y": -8.34009,
+      "yaw": 0.0,
+      "length": 4.5,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_113",
+      "x": 3.530697,
+      "y": -7.84863,
+      "yaw": 0.0,
+      "length": 7.25,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_115",
+      "x": 11.620537,
+      "y": -7.70906,
+      "yaw": 3.14159,
+      "length": 5.25,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_118",
+      "x": 1.909787,
+      "y": -4.782626,
+      "yaw": -1.5708,
+      "length": 2.5,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_12",
+      "x": -0.693325,
+      "y": -14.83969,
+      "yaw": 3.14159,
+      "length": 30.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_120",
+      "x": 0.6306970000000001,
+      "y": -8.97446,
+      "yaw": -1.0472,
+      "length": 2.75,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_125",
+      "x": -8.514173,
+      "y": -10.33576,
+      "yaw": -1.5708,
+      "length": 4.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_127",
+      "x": 6.588647,
+      "y": -9.9436,
+      "yaw": -1.5708,
+      "length": 4.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_129",
+      "x": -10.494323,
+      "y": -11.73018,
+      "yaw": 2.87979,
+      "length": 4.25,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_132",
+      "x": 8.824187,
+      "y": -11.33437,
+      "yaw": 0.261799,
+      "length": 4.75,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_134",
+      "x": -0.247191,
+      "y": -13.5073,
+      "yaw": 1.309,
+      "length": 3.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_15",
+      "x": -15.618363,
+      "y": -4.914687,
+      "yaw": 1.5708,
+      "length": 20.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_2",
+      "x": -0.693,
+      "y": 5.01,
+      "yaw": 0.0,
+      "length": 30.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_29",
+      "x": 3.917117,
+      "y": 4.49108,
+      "yaw": -1.5708,
+      "length": 1.25,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_31",
+      "x": 3.896997,
+      "y": 1.68905,
+      "yaw": 1.5708,
+      "length": 1.25,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_34",
+      "x": -8.614132999999999,
+      "y": 3.5098800000000008,
+      "yaw": -1.5708,
+      "length": 2.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_38",
+      "x": -10.048573,
+      "y": 0.8964400000000001,
+      "yaw": 0.0,
+      "length": 11.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_40",
+      "x": 7.146457,
+      "y": 1.0539899999999998,
+      "yaw": 3.14159,
+      "length": 14.25,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_46",
+      "x": -10.002003,
+      "y": -1.0942599999999998,
+      "yaw": -0.004163,
+      "length": 7.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_49",
+      "x": -13.769163,
+      "y": -1.5724899999999997,
+      "yaw": -1.82702,
+      "length": 1.17019,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_57",
+      "x": -4.9047730000000005,
+      "y": -2.03294,
+      "yaw": 1.5708,
+      "length": 2.75,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_59",
+      "x": 4.593877,
+      "y": -1.1524099999999997,
+      "yaw": -0.202428,
+      "length": 5.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_60",
+      "x": 9.193357,
+      "y": -1.19517,
+      "yaw": 0.527727,
+      "length": 2.1,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_61",
+      "x": 11.507137,
+      "y": -1.2059599999999997,
+      "yaw": -0.523599,
+      "length": 2.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_66",
+      "x": 1.049097,
+      "y": -2.49642,
+      "yaw": 2.25548,
+      "length": 3.01901,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_68",
+      "x": -9.378443,
+      "y": -3.43053,
+      "yaw": 3.14159,
+      "length": 9.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_72",
+      "x": 7.349097,
+      "y": -3.60763,
+      "yaw": 3.14159,
+      "length": 8.9356,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_75",
+      "x": -4.953443,
+      "y": -4.855531,
+      "yaw": -1.5708,
+      "length": 3.0,
+      "width": 0.15,
+      "height": 2.5
+    },
+    {
+      "link": "Wall_81",
+      "x": -3.8900629999999996,
+      "y": -9.15024,
+      "yaw": -0.523599,
+      "length": 4.25,
+      "width": 0.15,
+      "height": 2.5
+    }
+  ],
+  "reachable_grasp_poses": {
+    "red_cube_1": [
+      [
+        -12.55,
+        2.5
+      ],
+      [
+        -12.0,
+        1.95
+      ],
+      [
+        -11.45,
+        2.5
+      ],
+      [
+        -12.0,
+        3.05
+      ]
+    ],
+    "red_cube_2": [
+      [
+        -12.55,
+        -6.5
+      ],
+      [
+        -12.0,
+        -7.05
+      ],
+      [
+        -11.45,
+        -6.5
+      ],
+      [
+        -12.0,
+        -5.95
+      ]
+    ],
+    "red_cube_3": [
+      [
+        -7.55,
+        -12.0
+      ],
+      [
+        -7.0,
+        -12.55
+      ],
+      [
+        -6.45,
+        -12.0
+      ],
+      [
+        -7.0,
+        -11.45
+      ]
+    ],
+    "red_cube_4": [
+      [
+        3.45,
+        -11.0
+      ],
+      [
+        4.0,
+        -11.55
+      ],
+      [
+        4.55,
+        -11.0
+      ],
+      [
+        4.0,
+        -10.45
+      ]
+    ],
+    "red_cube_5": [
+      [
+        10.95,
+        3.0
+      ],
+      [
+        11.5,
+        2.45
+      ],
+      [
+        12.05,
+        3.0
+      ],
+      [
+        11.5,
+        3.55
+      ]
+    ],
+    "blue_cube_1": [
+      [
+        -10.05,
+        0.0
+      ],
+      [
+        -8.95,
+        0.0
+      ]
+    ],
+    "blue_cube_2": [
+      [
+        -9.05,
+        -4.5
+      ],
+      [
+        -8.5,
+        -5.05
+      ],
+      [
+        -7.95,
+        -4.5
+      ]
+    ],
+    "blue_cube_3": [
+      [
+        -4.05,
+        -12.7
+      ],
+      [
+        -3.5,
+        -13.25
+      ],
+      [
+        -2.95,
+        -12.7
+      ],
+      [
+        -3.5,
+        -12.149999999999999
+      ]
+    ],
+    "blue_cube_4": [
+      [
+        10.45,
+        -9.5
+      ],
+      [
+        11.0,
+        -10.05
+      ],
+      [
+        11.55,
+        -9.5
+      ],
+      [
+        11.0,
+        -8.95
+      ]
+    ],
+    "blue_cube_5": [
+      [
+        7.95,
+        -2.5
+      ],
+      [
+        9.05,
+        -2.5
+      ]
+    ]
+  },
+  "static_clearance_gate_m": 0.48,
+  "walls_preserved_from_local_usb_original": true,
+  "min_grasp_track_center_distance_m": {
+    "design_obstacle_left": 5.393514624064719,
+    "design_obstacle_right": 3.475068344651656
+  },
+  "min_obstacle_surface_to_wall_m": {
+    "design_obstacle_left": 0.6485729999999994,
+    "design_obstacle_right": 0.43617354530218844
+  },
+  "cargo_physics": "unchanged current stable definitions",
+  "removed_from_import": "Untitled 13-box model replaced by two explicit moving obstacles"
+}

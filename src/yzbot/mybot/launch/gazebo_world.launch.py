@@ -1,8 +1,9 @@
 import os
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, RegisterEventHandler, DeclareLaunchArgument, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
+from launch.actions import ExecuteProcess, RegisterEventHandler, TimerAction
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
  
@@ -25,21 +26,21 @@ def generate_launch_description():
     pkg_share = FindPackageShare(package=package_name).find(package_name) 
     urdf_model_path = os.path.join(pkg_share, f'urdf/{urdf_name}')
     world_file_path = os.path.join(pkg_share, f'worlds/{world_file_path}')
+    world_argument = LaunchConfiguration('world')
  
     # Start Gazebo server
-    start_gazebo_cmd =  ExecuteProcess(
+    start_gazebo_cmd = ExecuteProcess(
         cmd=['gzserver', '--verbose',
-             world_file_path,
-             '-s', 'libgazebo_ros_init.so', 
+             world_argument,
+             '-s', 'libgazebo_ros_init.so',
              '-s', 'libgazebo_ros_factory.so'],
         output='screen')
+    # Keep the simulation running even if the graphics client exits.
+    start_gazebo_client = TimerAction(
+        period=3.0,
+        actions=[ExecuteProcess(cmd=['gzclient', '--verbose'], output='screen', condition=IfCondition(LaunchConfiguration('gui')))])
  
  
-    # A GUI failure must not terminate the simulation server.
-    start_gazebo_client = ExecuteProcess(
-        cmd=['gzclient'], output='screen',
-        condition=IfCondition(LaunchConfiguration('gui')))
-
     # 因为 urdf文件中有一句 $(find mybot) 需要用xacro进行编译一下才行
     xacro_file = urdf_model_path
     doc = xacro.parse(open(xacro_file))
@@ -61,7 +62,7 @@ def generate_launch_description():
     spawn_entity_cmd = Node(
         package='gazebo_ros', 
         executable='spawn_entity.py',
-        arguments=['-entity', robot_name_in_model, '-topic', 'robot_description', '-timeout', '180'], output='screen')
+        arguments=['-entity', robot_name_in_model,  '-topic', 'robot_description', '-timeout', '180'], output='screen')
  
  
     # # Launch the robot, 这个是通过传递文件路径来在gazebo里生成模型.此时要求urdf文件里面没有xacro的语句
@@ -121,11 +122,8 @@ def generate_launch_description():
     )
     
     ld = LaunchDescription()
-    # Gazebo converts package:// mesh URIs to model://; include the ROS share
-    # parent so both server and GUI can resolve the description package.
-    ld.add_action(SetEnvironmentVariable(
-        'GAZEBO_MODEL_PATH', os.path.dirname(pkg_share) + os.pathsep + os.environ.get('GAZEBO_MODEL_PATH', '')))
-    ld.add_action(DeclareLaunchArgument('gui', default_value='true', description='Launch Gazebo client'))
+    ld.add_action(DeclareLaunchArgument('gui', default_value='true'))
+    ld.add_action(DeclareLaunchArgument('world', default_value=world_file_path))
  
     ld.add_action(close_evt1)
     ld.add_action(close_evt2)

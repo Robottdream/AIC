@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="laser">
 
     <xacro:macro name="lidar"
-        params="prefix:=laser gz_visualize:=false range_min:=0.10 range_max:=30.0 topic:=scan show_visual:=true">
+        params="prefix:=laser gz_visualize:=false range_min:=0.5 range_max:=30.0 update_rate:=10">
         <!-- Create laser reference frame -->
         <link name="${prefix}_link">
             <inertial>
@@ -11,13 +11,13 @@
                 <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01" />
             </inertial>
 
-            <xacro:if value="${show_visual}"><visual>
+            <visual>
                 <origin xyz=" 0 0 0 " rpy="0 0 0" />
                 <geometry>
                     <cylinder length="0.02" radius="0.031" />
                 </geometry>
                 <material name="black" />
-            </visual></xacro:if>
+            </visual>
 
             <collision>
                 <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
@@ -34,16 +34,13 @@
         </gazebo>
 
         <gazebo reference="${prefix}_link">
-            <sensor type="ray" name="${prefix}_lidar">
-                <update_rate>10</update_rate>
+            <sensor type="ray" name="lidar">
+                <update_rate>${update_rate}</update_rate>
                 <visualize>${gz_visualize}</visualize>
                 <ray>
                     <scan>
                         <horizontal>
-                            <!-- 0.25 degree rays: at 7 m their 3.1 cm spacing
-                                 stays below the 5 cm costmap cell size. -->
                             <samples>1441</samples>
-                            <!-- One returned range per ray: interpolation creates phantom edge hits. -->
                             <resolution>1</resolution>
                             <min_angle>-3.14159</min_angle>
                             <max_angle>3.14159</max_angle>
@@ -60,14 +57,10 @@
                         <stddev>0.005</stddev>
                     </noise>
                 </ray>
-                <plugin name="${prefix}_gazebo_lidar" filename="libgazebo_ros_ray_sensor.so">
+                <plugin name="gazebo_lidar" filename="libgazebo_ros_ray_sensor.so">
                     <ros>
                         <namespace>/</namespace>
-                        <remapping>~/out:=${topic}</remapping>
-                        <qos><topic name="${topic}"><publisher>
-                            <reliability>best_effort</reliability>
-                            <history depth="5">keep_last</history>
-                        </publisher></topic></qos>
+                        <remapping>~/out:=scan</remapping>
                     </ros>
                     <output_type>sensor_msgs/LaserScan</output_type>
                     <frame_name>${prefix}_link</frame_name>

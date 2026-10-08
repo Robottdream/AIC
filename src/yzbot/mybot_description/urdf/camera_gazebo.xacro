@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="camera">
 
-    <xacro:macro name="mipi_camera" params="prefix:=camera show_visual:=true">
+    <xacro:macro name="mipi_camera" params="prefix:=camera">
         <!-- Create camera reference frame -->
         <link name="${prefix}_link">
             <inertial>
@@ -12,13 +12,13 @@
                          izz="0.01" />
             </inertial>
 
-            <xacro:if value="${show_visual}"><visual>
+            <visual>
                 <origin xyz=" 0 0 0 " rpy="0 0 0" />
                 <geometry>
                     <box size="0.04 0.055 0.04" />
                 </geometry>
                 <material name="black"/>
-            </visual></xacro:if>
+            </visual>
 
             <collision>
                 <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />

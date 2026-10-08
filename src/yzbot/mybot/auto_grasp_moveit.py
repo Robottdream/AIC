@@ -22,7 +22,7 @@ class AutoGrasperWithMoveit(Node):
 
         # --- MoveIt! 初始化 ---
         self.get_logger().info("MoveItPy 初始化完成")
-        
+
         # 获取规划实体
 
         # --- ROS 服务和话题客户端/订阅者 ---
@@ -31,7 +31,7 @@ class AutoGrasperWithMoveit(Node):
         )
         self.attach_cli = self.create_client(AttachLink, '/ATTACHLINK')
         self.detach_cli = self.create_client(AttachLink, '/DETACHLINK')
-        
+
         # 等待服务
         while not self.attach_cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('ATTACHLINK 服务不可用, 正在等待...')
@@ -39,7 +39,7 @@ class AutoGrasperWithMoveit(Node):
             self.get_logger().info('DETACHLINK 服务不可用, 正在等待...')
 
         self.get_logger().info('自动抓取节点已准备就绪.')
-        
+
         # --- 内部变量 ---
         self.latest_model_states = None
         self.robot_name = 'six_arm'
@@ -59,20 +59,20 @@ class AutoGrasperWithMoveit(Node):
 
             # --- 2. 感知与决策 ---
             robot_pose = self.latest_model_states.pose[self.latest_model_states.name.index(self.robot_name)]
-            
-            cubes = [{'name': name, 'pose': self.latest_model_states.pose[i]} 
-                     for i, name in enumerate(self.latest_model_states.name) 
+
+            cubes = [{'name': name, 'pose': self.latest_model_states.pose[i]}
+                     for i, name in enumerate(self.latest_model_states.name)
                      if name.startswith('red_cube')]
-            
+
             if not cubes:
                 self.get_logger().warn('在场景中没有找到任何 "red_cube"!')
                 return
-            
+
             closest_cube = min(cubes, key=lambda cube: math.sqrt(
                 (cube['pose'].position.x - robot_pose.position.x)**2 +
                 (cube['pose'].position.y - robot_pose.position.y)**2
             ))
-            
+
             target_cube_name = closest_cube['name']
             target_cube_pose = closest_cube['pose']
             self.get_logger().info(f"决策完成: 最近的方块是 '{target_cube_name}'.")
@@ -80,14 +80,14 @@ class AutoGrasperWithMoveit(Node):
             # --- 3. 执行抓取流程 ---
             # a. 移动到物体上方 (预抓取)
             pre_grasp_pose = create_pose(
-                target_cube_pose.position.x, 
-                target_cube_pose.position.y, 
+                target_cube_pose.position.x,
+                target_cube_pose.position.y,
                 target_cube_pose.position.z + 0.10, # 在物体上方10cm
                 1.0, 0.0, 0.0, 0.0 # 面向下的姿态
             )
             self.move_to_pose(pre_grasp_pose)
 
-            
+
             # d. 调用服务进行吸附
             self.get_logger().info("调用服务进行吸附...")
             self.call_attach_service(self.robot_name, self.hand_link_name, target_cube_name, 'link')
@@ -96,7 +96,7 @@ class AutoGrasperWithMoveit(Node):
 
             self.get_logger().info("调用服务进行释放...")
             self.call_detach_service(self.robot_name, self.hand_link_name, target_cube_name, 'link')
-            
+
             self.get_logger().info("任务完成!")
 
         except ValueError as e:
@@ -129,18 +129,18 @@ class AutoGrasperWithMoveit(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    
+
     grasper_node = AutoGrasperWithMoveit(node_name="auto_grasper_with_moveit")
-    
+
     # 需要在新线程中运行spin，以防阻塞主流程
     import threading
     thread = threading.Thread(target=rclpy.spin, args=(grasper_node,), daemon=True)
     thread.start()
 
     time.sleep(3) # 等待MoveIt和模型状态信息初始化
-    
+
     grasper_node.find_and_pick_closest_cube()
-    
+
     rclpy.shutdown()
     thread.join()
 

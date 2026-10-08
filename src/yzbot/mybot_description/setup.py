@@ -14,7 +14,6 @@ setup(
         ('share/' + package_name, ['package.xml']),
         # urdf xacro files
         (os.path.join('share', package_name, 'urdf'), glob(os.path.join('urdf', '*.*'))),
-        (os.path.join("share", package_name, "meshes", "concept"), glob(os.path.join("meshes", "concept", "*"))),
         # world files
         (os.path.join('share', package_name, 'worlds'), glob(os.path.join('worlds', '*.*'))),
     ],

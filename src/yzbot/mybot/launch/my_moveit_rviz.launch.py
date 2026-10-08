@@ -2,16 +2,16 @@ from moveit_configs_utils import MoveItConfigsBuilder
 from moveit_configs_utils.launches import generate_moveit_rviz_launch
  
 from launch import LaunchDescription
+from launch.conditions import IfCondition
+from launch.actions import GroupAction
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
-    GroupAction,
 )
 from moveit_configs_utils.launch_utils import (
     add_debuggable_node,
     DeclareBooleanLaunchArg,
 )
-from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
  
@@ -20,16 +20,14 @@ def generate_launch_description():
     moveit_config = MoveItConfigsBuilder("six_arm", package_name="mybot").to_moveit_configs()
  
     ld = LaunchDescription()
+    ld.add_action(DeclareBooleanLaunchArg("rviz", default_value=True))
  
     # 启动move_group
     my_generate_move_group_launch(ld, moveit_config)
     # 启动rviz
-    ld.add_action(DeclareBooleanLaunchArg("rviz", default_value=True))
     rviz_ld = LaunchDescription()
     my_generate_moveit_rviz_launch(rviz_ld, moveit_config)
-    ld.add_action(GroupAction(
-        actions=list(rviz_ld.entities),
-        condition=IfCondition(LaunchConfiguration("rviz"))))
+    ld.add_action(GroupAction(actions=list(rviz_ld.entities), condition=IfCondition(LaunchConfiguration('rviz'))))
  
     return ld
  

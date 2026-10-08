@@ -22,9 +22,9 @@
     <xacro:rgbd_camera prefix="camera_rgbd" />
 
     <!-- Camera -->
-    <xacro:property name="camera_offset_x" value="0.155" />
+    <xacro:property name="camera_offset_x" value="${base_length/2+0.02}" />
     <xacro:property name="camera_offset_y" value="0" />
-    <xacro:property name="camera_offset_z" value="0.08" />
+    <xacro:property name="camera_offset_z" value="-0.01" />
 
     <joint name="camera_joint" type="fixed">
         <origin xyz="${camera_offset_x} ${camera_offset_y} ${camera_offset_z}" rpy="0 0 0" />
@@ -32,7 +32,7 @@
         <child link="camera_link" />
     </joint>
 
-    <xacro:mipi_camera prefix="camera" show_visual="false" />
+    <xacro:mipi_camera prefix="camera" />
 
     <!-- Lidar -->
     <xacro:property name="lidar_offset_x" value="0" />
@@ -47,10 +47,8 @@
         <child link="laser_link" />
     </joint>
 
-    <xacro:lidar prefix="laser" gz_visualize="false" range_min="${robot_radius + safety_margin}" show_visual="false" />
-    <!-- High scanner is available for inspection; navigation retains low /scan. -->
-    <joint name="high_lidar_joint" type="fixed"><origin xyz="-0.19 0 0.55"/><parent link="base_link"/><child link="laser_high_link"/></joint>
-    <xacro:lidar prefix="laser_high" topic="scan_high" range_min="0.55" show_visual="false" />
+    <!-- Keep near obstacles visible before they reach the base footprint. -->
+    <xacro:lidar prefix="laser" gz_visualize="false" range_min="0.30" update_rate="20" />
     <!-- <xacro:lidar prefix="laser" gz_visualize="false" range_min="${robot_radius + safety_margin}" /> -->
     <!-- <xacro:lidar prefix="laser" gz_visualize="false" range_min="${robot_radius + safety_margin}" /> -->
 

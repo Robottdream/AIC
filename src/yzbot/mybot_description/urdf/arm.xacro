@@ -68,10 +68,9 @@
         </inertial>
     </xacro:macro>
 
-    <xacro:macro name="cylinder_i" params="r h center:=0">
+    <xacro:macro name="cylinder_i" params="r h">
         <inertial>
-        <!-- Arm cylinders extend along Z; COM must match the visual/collision. -->
-        <origin xyz="0 0 ${center}" rpy="0 0 0" />
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0" />
         <xacro:property name="m" value="${(pi*r*r*h*P)}" />
         <mass value="${m}"/>
         <inertia ixx="${(m/12) * (3*r*r + h*h)}" ixy = "0" ixz = "0" iyy="${(m/12) * (3*r*r + h*h)}" iyz = "0" izz="${(m/2) * (r*r)}"/>
@@ -140,7 +139,7 @@
             </geometry>
         </collision>
         <!-- <xacro:inertial_matrix m="0.1" /> -->
-        <xacro:cylinder_i r="${link2_rad}" h="${link2_len}" center="${link2_len/2}" />
+        <xacro:cylinder_i r="${link2_rad}" h="${link2_len}" />
     </link>
 
     <!-- joint2 -->
@@ -169,7 +168,7 @@
             </geometry>
         </collision>
         <!-- <xacro:inertial_matrix m="0.1" /> -->
-        <xacro:cylinder_i r="${link3_rad}" h="${link3_len}" center="${link3_len/2}" />
+        <xacro:cylinder_i r="${link3_rad}" h="${link3_len}" />
     </link>
 
     <!-- joint3 -->
@@ -199,7 +198,7 @@
             </geometry>
         </collision>
         <!-- <xacro:inertial_matrix m="0.1" /> -->
-        <xacro:cylinder_i r="${link4_rad}" h="${link4_len}" center="${link4_len/2}" />
+        <xacro:cylinder_i r="${link4_rad}" h="${link4_len}" />
     </link>
     <!-- joint4 -->
     <joint name="joint4" type="revolute">
@@ -227,7 +226,7 @@
             </geometry>
         </collision>
         <!-- <xacro:inertial_matrix m="0.1" /> -->
-        <xacro:cylinder_i r="${link5_rad}" h="${link5_len}" center="${link5_len/2}" />
+        <xacro:cylinder_i r="${link5_rad}" h="${link5_len}" />
     </link>
 
     <!-- joint5 -->
@@ -257,7 +256,7 @@
             </geometry>
         </collision>
         <!-- <xacro:inertial_matrix m="0.1" /> -->
-        <xacro:cylinder_i r="${link6_rad}" h="${link6_len}" center="${link6_len/2}" />
+        <xacro:cylinder_i r="${link6_rad}" h="${link6_len}" />
     </link>
 
     <!-- joint6 -->

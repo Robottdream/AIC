@@ -7,28 +7,13 @@ from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Int32
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_msgs.action import ComputePathToPose
-from nav_msgs.msg import Odometry
 from rclpy.timer import Timer
 import json
 import math
 import weakref
-import os
 from itertools import permutations
 
 class MainControllerNode(Node):
-    # Map-specific corridor entrances. NavFn can cut corners that DWB's full
-    # footprint cannot turn through; these points keep the whole route in the
-    # open side of the wall. The rest of the state machine treats them as
-    # ordinary intermediate Nav2 goals.
-    BLOCK_INGRESS = {("red_cube_3", 2): (-6.5, 1.8, math.pi / 2)}
-    AREA_INGRESS = {
-        ("blue_cube_5", "B"): (-1.8, -2.4, -math.pi / 2),
-        # Leave the pickup northward before approaching C. The old southern
-        # guide led directly alongside obstacle2's lane and could pin both
-        # robot and obstacle in a mutual stop near the pickup.
-        ("blue_cube_4", "C"): (-7.0, -2.4, -math.pi / 2),
-    }
-
     def __init__(self):
         super().__init__("main_controller_node")
         self.set_parameters([Parameter("use_sim_time", value=True)])
@@ -42,27 +27,40 @@ class MainControllerNode(Node):
         
         # 预设位置参数
         self.RED_BLOCKS = [
-            (7.632928, 5.523903, False),
-            (9.604514, -3.707741, False),
-            (-5.735783, 5.507306, False),
-            (-8.702837, 1.000008, False),
-            (-10.748330, 4.014158, False)
+            (x, y, False) for x, y in self._position_pairs_parameter(
+                "red_block_positions", [
+                    7.632928, 5.523903,
+                    9.604514, -3.707741,
+                    -5.735783, 5.507306,
+                    -8.702837, 1.000008,
+                    -10.748330, 4.014158,
+                ])
         ]
         self.BLUE_BLOCKS = [
-            (8.464876, -7.097603, False),
-            (5.040937, -7.441163, False),
-            (-1.478995, 6.646223, False),
-            (-9.664453, -3.267239, False),
-            (-3.703343, 0.829596, False)
+            (x, y, False) for x, y in self._position_pairs_parameter(
+                "blue_block_positions", [
+                    8.464876, -7.097603,
+                    5.040937, -7.441163,
+                    -1.478995, 6.646223,
+                    -9.664453, -3.267239,
+                    -3.703343, 0.829596,
+                ])
         ]
-        self.AREA_COORDS = {
-            "A": (2.593086, -5.727858),
-            "B": (-1.746544, -6.485499),
-            "C": (-7.423777, -7.785160)
-        }
+        # Base parking poses; the arm still checks the unchanged physical zone bounds.
+        self.AREA_COORDS = dict(zip(
+            ("A", "B", "C"),
+            self._position_pairs_parameter("area_parking_positions", [
+                2.593086, -5.970000,
+                -1.746544, -6.585499,
+                -6.873777, -7.785160,
+            ]),
+        ))
+        self.stable_layout_hints = self.declare_parameter("stable_layout_hints", True).value
         
         # 核心变量
         self.current_robot_pose = (0.0, 0.0)
+        self.current_robot_yaw = 0.0
+        self.turn_cost_weight = float(self.declare_parameter("turn_cost_weight", 0.20).value)
         self.plan_client = ActionClient(self, ComputePathToPose, "/compute_path_to_pose")
         self.selection_id = 0
         self.failed_blocks_for_step = set()
@@ -80,8 +78,6 @@ class MainControllerNode(Node):
         self.optimized_tasks = [] # 优化后的任务执行顺序
         self.completed_num = 0    # 当前任务已完成数量
         self.current_step = "WAIT_TASK"  # 状态：WAIT_TASK/NAV_TO_BLOCK/GRASP/NAV_TO_AREA/PLACE
-        self.block_nav_targets = []
-        self.block_nav_target_index = 0
         self.selected_block = None
         self.grasp_confirmed = False
         self.place_confirmed = False
@@ -94,19 +90,15 @@ class MainControllerNode(Node):
         # 超时设置
         self.GRASP_TIMEOUT = 8.0
         self.PLACE_TIMEOUT = 8.0
+        self.max_place_retry = 3
+        self.current_place_retry = 0
         
         # 订阅器
-        # Candidate start positions must use the same localization source as
-        # Nav2. With identity map->odom, unused AMCL estimates may drift.
-        odom_map = self.declare_parameter('odom_map',
-            os.environ.get('AIC_ODOM_MAP', '0').lower() in ('1', 'true', 'yes')).value
         self.amcl_pose_sub = self.create_subscription(
-            Odometry if odom_map else PoseWithCovarianceStamped,
-            '/odom' if odom_map else '/amcl_pose', self._amcl_callback, self.qos_best_effort
+            PoseWithCovarianceStamped, "/amcl_pose", self._amcl_callback, self.qos_best_effort
         )
-        self.get_logger().info('选块定位来源：' + ('map 对齐的 /odom' if odom_map else '/amcl_pose'))
         self.chat_sub = self.create_subscription(
-            String, "/chat", self._chat_callback, 10
+            String, "/chat", self._chat_callback, self.qos_best_effort
         )
         self.nav_status_sub = self.create_subscription(
             String, "/nav_status", self._nav_status_callback, 10
@@ -139,6 +131,12 @@ class MainControllerNode(Node):
         self.target_area_pub.publish(Int32(data=9))
         self.number_pick_pub.publish(Int32(data=0))
     
+    def _position_pairs_parameter(self, name, default):
+        values = self.declare_parameter(name, default).value
+        if len(values) != len(default) or not all(math.isfinite(value) for value in values):
+            raise ValueError(f"{name} must contain {len(default)} finite coordinates")
+        return list(zip(values[::2], values[1::2]))
+
     # 计算两点之间的距离
     def calculate_distance(self, point1, point2):
         return math.hypot(point1[0] - point2[0], point1[1] - point2[1])
@@ -187,6 +185,25 @@ class MainControllerNode(Node):
             ) for a, b in zip(points, points[1:])
         )
 
+    @staticmethod
+    def _endpoint_turn_cost(path, start_yaw, end_yaw):
+        """Estimate endpoint rotations using 0.35 m chords, avoiding grid jitter."""
+        points = [(p.pose.position.x, p.pose.position.y) for p in path.poses]
+        if len(points) < 2:
+            return 0.0
+        def heading(origin, candidates, reverse=False):
+            for point in candidates:
+                dx, dy = point[0] - origin[0], point[1] - origin[1]
+                if math.hypot(dx, dy) >= 0.35:
+                    return math.atan2(-dy, -dx) if reverse else math.atan2(dy, dx)
+            return None
+        first = heading(points[0], points[1:])
+        last = heading(points[-1], reversed(points[:-1]), reverse=True)
+        def difference(a, b):
+            return abs(math.atan2(math.sin(a - b), math.cos(a - b)))
+        return ((difference(first, start_yaw) if first is not None else 0.0)
+                + (difference(end_yaw, last) if last is not None else 0.0))
+
     def _select_reachable_block(self):
         """每件货物从当前定位出发，按 Nav2 实际往返路径重新选块。"""
         if not self.current_assignment:
@@ -218,11 +235,12 @@ class MainControllerNode(Node):
         )
         self._plan_next_candidate(selection_id)
 
-    @staticmethod
-    def _approach_penalty(color, block_index, candidate_index):
+    def _approach_penalty(self, color, block_index, candidate_index):
         # These approaches completed the full mission without a progress
         # recovery. Keep alternatives available if the preferred path closes.
-        preferred = {("red", 2): 2, ("blue", 4): 1}
+        if not self.stable_layout_hints:
+            return 0.0
+        preferred = {("red", 1): 0, ("red", 2): 2, ("blue", 4): 1}
         direction = preferred.get((color, block_index))
         return 20.0 if direction is not None and candidate_index != direction else 0.0
 
@@ -247,6 +265,16 @@ class MainControllerNode(Node):
         remaining = self._remaining_same_area_tasks()
         if remaining == 0:
             return self.selection_best
+        # In this five-cargo layout, the west red block is safest from the
+        # initial pose. Reaching it later from area A crossed the narrow wall
+        # during validation; use the previously completed order when reachable.
+        if (self.current_task["color"] == "red" and self.current_task["to"] == "A"
+                and self.current_task.get("original_num") == 3
+                and self.current_task.get("current_index") == 1):
+            preferred = [option for option in self.selection_options if option[2][2] == 3]
+            if preferred:
+                cost, _, block, direction = min(preferred, key=lambda option: option[0])
+                return (cost, block, direction)
 
         future_cost_by_block = {}
         for current_cost, return_length, block, candidate_index in self.selection_options:
@@ -270,7 +298,13 @@ class MainControllerNode(Node):
             key = (score, current_cost, block[2], candidate_index)
             if best is None or key < best[0]:
                 best = (key, (current_cost, block, candidate_index))
-        return best[1] if best else self.selection_best
+        if best is None:
+            return self.selection_best
+        # A lookahead estimate must not send this delivery on a much longer
+        # current round trip; live obstacle positions make future paths noisy.
+        if best[1][0] > self.selection_best[0] + 3.0:
+            return self.selection_best
+        return best[1]
 
     def _plan_next_candidate(self, selection_id):
         if selection_id != self.selection_id or self.current_step != "SELECT_BLOCK":
@@ -280,6 +314,11 @@ class MainControllerNode(Node):
                 self._stop_failed_task("当前没有可达且可返回目标区域的同色物块")
                 return
             greedy_best = self.selection_best
+            option_summary = sorted(self.selection_options, key=lambda o: o[0])[:8]
+            self.get_logger().info("候选往返代价: " + ", ".join(
+                f"{self.current_task['color']}_cube_{option[2][2] + 1}"
+                f"/方向{option[3] + 1}={option[0]:.1f}m"
+                for option in option_summary))
             self.selection_best = self._choose_route_with_lookahead()
             _, block, candidate_index = self.selection_best
             if (block[2], candidate_index) != (greedy_best[1][2], greedy_best[2]):
@@ -336,6 +375,8 @@ class MainControllerNode(Node):
             block, candidate_index, candidate = self._active_candidate
             if not returning:
                 self._outbound_length = length
+                self._outbound_turn_cost = self.turn_cost_weight * self._endpoint_turn_cost(
+                    response.result.path, self.current_robot_yaw, candidate[2])
                 request = ComputePathToPose.Goal()
                 request.start = self._pose_stamped(*candidate)
                 area = self.current_assignment["area_pos"]
@@ -346,12 +387,15 @@ class MainControllerNode(Node):
                     lambda result: self._plan_response(result, selection_id, True)
                 )
                 return
-            total_length = self._outbound_length + length
+            # Express turning effort in equivalent metres; retain validated approach preferences.
+            return_cost = length + self.turn_cost_weight * self._endpoint_turn_cost(
+                response.result.path, candidate[2], 0.0)
+            total_length = self._outbound_length + self._outbound_turn_cost + return_cost
             ranking_cost = total_length + self._approach_penalty(
                 self.current_task["color"], block[2], candidate_index
             )
             self.selection_options.append(
-                (ranking_cost, length, block, candidate_index)
+                (ranking_cost, return_cost, block, candidate_index)
             )
             if self.selection_best is None or ranking_cost < self.selection_best[0]:
                 self.selection_best = (ranking_cost, block, candidate_index)
@@ -582,6 +626,9 @@ class MainControllerNode(Node):
         self = self_ref()
         if not self:
             return
+        q = msg.pose.pose.orientation
+        self.current_robot_yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y*q.y + q.z*q.z))
         new_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y)
         if abs(new_pose[0] - self.current_robot_pose[0]) > 0.01 or \
            abs(new_pose[1] - self.current_robot_pose[1]) > 0.01:
@@ -706,8 +753,6 @@ class MainControllerNode(Node):
         self.current_area_nav_retry = 0
         self.area_nav_targets = []
         self.area_nav_target_index = 0
-        self.block_nav_targets = []
-        self.block_nav_target_index = 0
         self.closest_cache = None
         self._clean_timers()
         
@@ -750,13 +795,9 @@ class MainControllerNode(Node):
         status = msg.data.strip()
         if status == "succeeded":
             if self.current_step == "NAV_TO_BLOCK":
-                if self.block_nav_target_index + 1 < len(self.block_nav_targets):
-                    self.block_nav_target_index += 1
-                    self._send_current_block_target()
-                else:
-                    self.get_logger().info("到达物块位置，准备抓取")
-                    self.current_step = "GRASP"
-                    self.trigger_grasp()
+                self.get_logger().info("到达物块位置，准备抓取")
+                self.current_step = "GRASP"
+                self.trigger_grasp()
             elif self.current_step == "NAV_TO_AREA":
                 if self.area_nav_target_index + 1 < len(self.area_nav_targets):
                     self.area_nav_target_index += 1
@@ -793,6 +834,14 @@ class MainControllerNode(Node):
                     self._stop_failed_task(f"目标区域导航失败：{status}")
         elif status in ("emergency_stop", "paused"):
             self._stop_failed_task(f"导航已停止：{status}")
+
+    def _retry_area_navigation(self):
+        if self.retry_timer:
+            self.retry_timer.cancel()
+            self.retry_timer.destroy()
+            self.retry_timer = None
+        if self.current_step == "NAV_TO_AREA" and self.current_assignment:
+            self._send_current_area_target()
 
     def _stop_failed_task(self, reason):
         """保留未完成货物状态，停止后续任务，等待人工重新下达命令。"""
@@ -831,6 +880,33 @@ class MainControllerNode(Node):
         elif status == "grasp_failed" and self.current_step == "GRASP":
             self.get_logger().warn("机械臂抓取失败，立即重试")
             self._check_grasp(self_ref)
+        elif status.startswith("place_reposition:") and self.current_step == "PLACE":
+            if self.place_timer:
+                self.place_timer.cancel()
+                self.place_timer.destroy()
+                self.place_timer = None
+            try:
+                _, dx_text, dy_text = status.split(":")
+                dx, dy = float(dx_text), float(dy_text)
+                if not all(math.isfinite(v) for v in (dx, dy)):
+                    raise ValueError("non-finite cube offset")
+                if self.current_place_retry >= self.max_place_retry:
+                    self._stop_failed_task("物块放置位置修正三次仍失败")
+                    return
+                x, y, yaw = self.area_nav_targets[-1]
+                # Replan around obstacles with Nav2; never drive the base
+                # directly or spin it beside the placement board.
+                corrected = (x + max(-0.35, min(0.35, dx)),
+                             y + max(-0.35, min(0.35, dy)), yaw)
+                self.area_nav_targets[-1] = corrected
+                self.area_nav_target_index = len(self.area_nav_targets) - 1
+                self.current_area_nav_retry = 0
+                self.get_logger().warn(f"物块偏离放置区，重新导航到 {corrected}")
+                self._send_current_area_target()
+            except (ValueError, IndexError) as exc:
+                self._stop_failed_task(f"放置修正数据无效: {exc}")
+        elif status == "place_lost" and self.current_step == "PLACE":
+            self._stop_failed_task("物块分离后未落在目标区域，停止以避免误报完成")
         elif status == "place_failed" and self.current_step == "PLACE":
             self.get_logger().warn("机械臂放置失败，立即重试")
             self._check_place(self_ref)
@@ -841,27 +917,6 @@ class MainControllerNode(Node):
         del self_ref
     
     # 导航到物块（使用优化路径）
-    def _block_ingress_waypoint(self, cube_name):
-        # The direct route from the southeast to red_cube_3's east side can
-        # enter the wall tip at (-3.66, 3.42), where the robot cannot turn.
-        # The southwest passage is open in the static map and was driven in
-        # the earlier six-task run. Other starts and approaches stay direct.
-        x, y = self.current_robot_pose
-        if (cube_name == "red_cube_3" and self.current_grasp_candidate_index == 2
-                and x > -5.5 and y < 4.0):
-            return self.BLOCK_INGRESS[(cube_name, self.current_grasp_candidate_index)]
-        return None
-
-    def _send_current_block_target(self):
-        target = self.block_nav_targets[self.block_nav_target_index]
-        nav_msg = String()
-        nav_msg.data = json.dumps({"type": "custom", "x": target[0], "y": target[1], "yaw": target[2]})
-        self.nav_target_pub.publish(nav_msg)
-        self.get_logger().info(
-            f"导航到物块途经点 {self.block_nav_target_index + 1}/{len(self.block_nav_targets)}："
-            f"({target[0]:.2f}, {target[1]:.2f})"
-        )
-
     def navigate_to_block(self):
         self._clean_timers()
         if not self.current_assignment:
@@ -874,10 +929,10 @@ class MainControllerNode(Node):
             self.current_assignment["block_pos"]
         )[self.current_grasp_candidate_index]
         cube_name = self.selected_block[2]
-        waypoint = self._block_ingress_waypoint(cube_name)
-        self.block_nav_targets = ([waypoint] if waypoint else []) + [grasp_pos]
-        self.block_nav_target_index = 0
-        self._send_current_block_target()
+        # 发布导航目标
+        nav_msg = String()
+        nav_msg.data = json.dumps({"type": "custom", "x": grasp_pos[0], "y": grasp_pos[1], "yaw": grasp_pos[2]})
+        self.nav_target_pub.publish(nav_msg)
         self.target_cube_pub.publish(String(data=cube_name))
         self.current_step = "NAV_TO_BLOCK"
         self._update_foxglove()
@@ -929,12 +984,13 @@ class MainControllerNode(Node):
         if not self.current_assignment:
             return
         self.place_confirmed = False
+        self.current_place_retry = 0
         area_pos = self.current_assignment["area_pos"]
         self.area_nav_targets = [(area_pos[0], area_pos[1], 0.0)]
-        route_key = (self.selected_block[2], self.current_task["to"]) if self.selected_block else None
-        waypoint = self.AREA_INGRESS.get(route_key)
-        if waypoint:
-            self.area_nav_targets.insert(0, waypoint)
+        # The B approach from blue_cube_5 crosses a narrow doorway.
+        if (self.stable_layout_hints and self.current_task["to"] == "B" and self.selected_block
+                and self.selected_block[2] == "blue_cube_5"):
+            self.area_nav_targets.insert(0, (-1.8, -2.8, -math.pi / 2))
         self.area_nav_target_index = 0
         self.current_area_nav_retry = 0
         self._send_current_area_target()
@@ -957,6 +1013,10 @@ class MainControllerNode(Node):
 
     # 触发放置
     def trigger_place(self):
+        if self.current_place_retry >= self.max_place_retry:
+            self._stop_failed_task("放置连续失败，停止后续任务并检查货物状态")
+            return
+        self.current_place_retry += 1
         self.get_logger().info("触发放置")
         self.place_confirmed = False
         self_ref = weakref.ref(self)

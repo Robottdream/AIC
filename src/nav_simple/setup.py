@@ -21,7 +21,6 @@ setup(
         'console_scripts': [
             # 节点入口：ros2 run nav_simple simple_navigator
             'simple_navigator = nav_simple.simple_navigator:main',
-            'navigation_tf_relay = nav_simple.navigation_tf_relay:main',
         ],
     },
 )

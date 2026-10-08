@@ -35,8 +35,8 @@ amcl:
     sigma_hit: 0.2
     tf_broadcast: true
     transform_tolerance: 1.0
-    update_min_a: 0.2
-    update_min_d: 0.25
+    update_min_a: 0.05
+    update_min_d: 0.08
     z_hit: 0.5
     z_max: 0.05
     z_rand: 0.5
@@ -57,9 +57,8 @@ bt_navigator:
     global_frame: map
     robot_base_frame: base_link
     odom_topic: /odom
-    default_nav_to_pose_bt_xml: ""
     bt_loop_duration: 10
-    # Allow normal DDS acknowledgement jitter without triggering recovery.
+    # Allow action acknowledgements to survive brief WSL scheduling delays.
     default_server_timeout: 200
     # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
     # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
@@ -121,7 +120,7 @@ controller_server:
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 3.0
+    failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
     controller_plugins: ["FollowPath"]
@@ -130,45 +129,44 @@ controller_server:
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.1
-      movement_time_allowance: 20.0
+      movement_time_allowance: 6.0
     # Goal checker parameters
     #precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"
     #  xy_goal_tolerance: 0.25
-    #  yaw_goal_tolerance: 0.25
+    #  yaw_goal_tolerance: 0.10
     #  stateful: True
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 0.25
-    # Regulated path tracking: slow on curves, near obstacles and at the goal.
+      yaw_goal_tolerance: 0.10
+    # RPP slows before sharp turns and when the costmap shows nearby walls.
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.7
-      lookahead_dist: 0.6
-      min_lookahead_dist: 0.3
-      max_lookahead_dist: 0.9
-      lookahead_time: 1.2
+      desired_linear_vel: 2.2
+      lookahead_dist: 0.55
+      min_lookahead_dist: 0.35
+      max_lookahead_dist: 1.0
+      lookahead_time: 1.0
       use_velocity_scaled_lookahead_dist: true
-      rotate_to_heading_angular_vel: 1.5
-      max_angular_accel: 2.4
-      rotate_to_heading_min_angle: 0.6
-      use_rotate_to_heading: true
-      allow_reversing: false
-      transform_tolerance: 0.5
-      min_approach_linear_velocity: 0.05
-      approach_velocity_scaling_dist: 0.7
-      use_regulated_linear_velocity_scaling: true
-      regulated_linear_scaling_min_radius: 1.2
-      regulated_linear_scaling_min_speed: 0.15
-      use_cost_regulated_linear_velocity_scaling: true
-      cost_scaling_dist: 0.6
-      cost_scaling_gain: 1.0
-      inflation_cost_scaling_factor: 3.0
+      rotate_to_heading_angular_vel: 2.0
+      max_angular_accel: 6.0
+      transform_tolerance: 0.2
+      min_approach_linear_velocity: 0.08
+      approach_velocity_scaling_dist: 1.2
       use_collision_detection: true
       max_allowed_time_to_collision_up_to_carrot: 1.5
-      use_interpolation: true
+      use_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 1.1
+      regulated_linear_scaling_min_speed: 0.18
+      use_cost_regulated_linear_velocity_scaling: true
+      cost_scaling_dist: 0.60
+      cost_scaling_gain: 0.80
+      inflation_cost_scaling_factor: 3.0
+      use_rotate_to_heading: true
+      rotate_to_heading_min_angle: 0.65
+      allow_reversing: false
 
 controller_server_rclcpp_node:
   ros__parameters:
@@ -183,10 +181,10 @@ local_costmap:
       robot_base_frame: base_link
       use_sim_time: True
       rolling_window: true
-      width: 4
-      height: 4
+      width: 5
+      height: 5
       resolution: 0.05
-      footprint: "[[0.32, 0.276], [0.32, -0.276], [-0.26, -0.276], [-0.26, 0.276]]"
+      footprint: "[[0.26, 0.31], [0.26, -0.31], [-0.26, -0.31], [-0.26, 0.31]]"
       plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -199,9 +197,8 @@ local_costmap:
         scan:
           topic: /scan
           max_obstacle_height: 2.0
-          # Gazebo +Inf beams mean clear space; use them to remove old hits.
-          inf_is_valid: True
           clearing: True
+          inf_is_valid: True
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 7.0
@@ -209,6 +206,7 @@ local_costmap:
           obstacle_max_range: 6.0
           obstacle_min_range: 0.0
       static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       always_send_full_costmap: True
   local_costmap_client:
@@ -221,12 +219,12 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 5.0
+      update_frequency: 2.0
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
       use_sim_time: True
-      footprint: "[[0.32, 0.276], [0.32, -0.276], [-0.26, -0.276], [-0.26, 0.276]]"
+      footprint: "[[0.26, 0.31], [0.26, -0.31], [-0.26, -0.31], [-0.26, 0.31]]"
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
@@ -237,9 +235,8 @@ global_costmap:
         scan:
           topic: /scan
           max_obstacle_height: 2.0
-          # Gazebo +Inf beams mean clear space; use them to remove old hits.
-          inf_is_valid: True
           clearing: True
+          inf_is_valid: True
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 7.0
@@ -339,6 +336,11 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: True
-    max_velocity: [0.7, 0.0, 1.5]
-    max_accel: [0.35, 0.0, 2.4]
-    max_decel: [-2.5, 0.0, -3.2]
+    smoothing_frequency: 30.0
+    feedback: "OPEN_LOOP"
+    scale_velocities: false
+    max_velocity: [2.2, 0.0, 2.5]
+    min_velocity: [-0.3, 0.0, -2.5]
+    max_accel: [3.5, 0.0, 6.0]
+    max_decel: [-5.0, 0.0, -6.0]
+    velocity_timeout: 1.0

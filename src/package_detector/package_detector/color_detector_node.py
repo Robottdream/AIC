@@ -15,7 +15,7 @@ class StaticObjectAnnotator(Node):
         # 1. QoS配置
         radar_qos = QoSProfile(
             depth=5,
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            reliability=QoSReliabilityPolicy.RELIABLE,
             durability=QoSDurabilityPolicy.VOLATILE
         )
         image_qos = QoSProfile(
