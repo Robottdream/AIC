@@ -9,8 +9,8 @@ esac
 if [[ $# -gt 0 ]]; then shift; fi
 if [[ $# -eq 0 ]]; then set -- benchmark; fi
 case "$1" in
-  benchmark|build|stop|status|logs) ;;
-  *) echo 'Usage: bash test_map.sh SCENE [benchmark|build|stop|status|logs]' >&2; exit 2 ;;
+  start|restart|benchmark|build|stop|status|logs) ;;
+  *) echo 'Usage: bash test_map.sh SCENE [start|restart|benchmark|build|stop|status|logs]' >&2; exit 2 ;;
 esac
 AIC_TEST_WORKSPACE="/tmp/aic-map-$AIC_SCENE_NAME"
 AIC_SCENE_ROOT="$AIC_SOURCE_ROOT/scenarios/$AIC_SCENE_NAME"

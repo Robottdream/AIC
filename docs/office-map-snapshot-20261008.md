@@ -38,6 +38,15 @@
 
 ## 运行
 
+普通启动入口现在默认使用本地图，并等待人工发令：
+
+```bash
+bash ros_competition_start.sh start
+```
+
+也可用 `bash test_map.sh short_routes_20261007 start` 在 ASCII 临时路径中启动，
+或用 `restart` 重启同一场景。构建、启动和运行环境仍须使用 WSL。
+
 在具备 ROS 2 Humble、Gazebo Classic 和 colcon 的 bash 环境中，从仓库根目录执行：
 
 ```bash
@@ -47,3 +56,17 @@ PYTHONNOUSERSITE=1 LIBGL_ALWAYS_SOFTWARE=1 QT_X11_NO_MITSHM=1 bash test_map.sh s
 该命令自动构建并下发三红 A、两蓝 B 的五件任务，只打开 Gazebo。
 `test_map.sh` 将源码和场景复制到 `/tmp/aic-map-short_routes_20261007` 后运行，避免中文路径影响 Nav2。
 原始运行日志留在本机，不上传。USB 导入原件作为地图生成输入保留在场景目录中。
+
+## 默认启动修正验证（2026-10-08）
+
+原普通入口仍使用旧 `room.world` 和安装包内的旧地图；现将世界、导航地图、
+Nav2 参数和任务坐标同时设为本场景，显式环境变量仍优先。
+`test_map.sh` 增加 `start` / `restart`；启动器按进程组判断运行状态，
+避免启动父进程退出后漏报仍占用 9090 的子进程。
+
+在 `/home/polarbear/ws_aic` 中，13 包构建和普通 `start` 就绪检查通过，10 模块运行。
+发布的 `/map` 为 640×440，281,600 个格子与本场景 PGM 逐格一致；
+主控物块/停车点、机械臂区域和导航障碍轨道参数与 `tasks.yaml` 一致。
+Gazebo 核验 A/B/C 区中心为 (-7.4,-5.4)、(7.5,-5.4)、(-2.25,3.1)，
+抽查红/蓝首件位置与世界文件一致。旧临时启动进程组已回收，9090 为新副本提供。
+本次未下发搬运任务，不改变上文关于五件全程未通过的结论。

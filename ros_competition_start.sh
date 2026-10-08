@@ -7,6 +7,19 @@ case "${1:-start}" in
   stop|status|logs) exec python3 "$WS/tools/project_launcher.py" "$@" ;;
 esac
 export PYTHONNOUSERSITE=1
+# Keep Gazebo, Nav2 and cargo/zone coordinates on the same default scene.
+# test_map.sh and explicit AIC_* overrides can still select another scene.
+AIC_SCENE_ROOT="$WS/scenarios/${AIC_SCENE:-short_routes_20261007}"
+export AIC_WORLD="${AIC_WORLD:-$AIC_SCENE_ROOT/office_test.world}"
+export AIC_MAP="${AIC_MAP:-$AIC_SCENE_ROOT/mapn3.yaml}"
+export AIC_TASK_CONFIG="${AIC_TASK_CONFIG:-$AIC_SCENE_ROOT/tasks.yaml}"
+AIC_DEFAULT_NAV_PARAMS="$AIC_SCENE_ROOT/nav2.yaml"
+[[ -f "$AIC_DEFAULT_NAV_PARAMS" ]] || AIC_DEFAULT_NAV_PARAMS="$WS/src/yzbot/bot_navigation/param/originbot_nav2.yaml"
+export AIC_NAV_PARAMS="${AIC_NAV_PARAMS:-$AIC_DEFAULT_NAV_PARAMS}"
+for scene_file in "$AIC_WORLD" "$AIC_MAP" "$AIC_TASK_CONFIG" "$AIC_NAV_PARAMS"; do
+  test -f "$scene_file" || { echo "Scene file missing: $scene_file" >&2; exit 1; }
+done
+printf 'World: %s\nMap: %s\nTasks: %s\nNav2: %s\n' "$AIC_WORLD" "$AIC_MAP" "$AIC_TASK_CONFIG" "$AIC_NAV_PARAMS"
 # WSL restarts can leave Fast DDS shared-memory ports locked. Respect explicit
 # middleware/profile choices, otherwise use UDP for the default Fast DDS stack.
 if [[ -n "${WSL_DISTRO_NAME:-}" && "${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}" == rmw_fastrtps_cpp && -z "${FASTRTPS_DEFAULT_PROFILES_FILE:-}" && -z "${FASTDDS_DEFAULT_PROFILES_FILE:-}" ]]; then
