@@ -46,11 +46,11 @@ simple_nav2_navigator:
     obstacle_tracks:
     - -3.65
     - 1.0
-    - -0.9
+    - -1.4
     - 1.0
     - -5.6
     - -7.06
-    - 2.7
+    - -1.45
     - -7.06
     obstacle_sizes:
     - 0.5

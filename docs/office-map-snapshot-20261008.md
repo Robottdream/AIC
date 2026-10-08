@@ -47,3 +47,9 @@ PYTHONNOUSERSITE=1 LIBGL_ALWAYS_SOFTWARE=1 QT_X11_NO_MITSHM=1 bash test_map.sh s
 该命令自动构建并下发三红 A、两蓝 B 的五件任务，只打开 Gazebo。
 `test_map.sh` 将源码和场景复制到 `/tmp/aic-map-short_routes_20261007` 后运行，避免中文路径影响 Nav2。
 原始运行日志留在本机，不上传。USB 导入原件作为地图生成输入保留在场景目录中。
+
+## 后续静态障碍修正
+
+当前分支另行按原 PGM 配准恢复13个橙色静态方块，缩短两条相交移动轨道。
+该新布局尚未执行五件搬运回归，本文旧计时不代表新场景结果。
+具体修改与验证见 [static-obstacles-20261008.md](static-obstacles-20261008.md)。

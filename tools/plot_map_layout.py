@@ -21,6 +21,13 @@ for wall in data['wall_boxes']:
          for dx,dy in [(-wall['length']/2,-wall['width']/2),(wall['length']/2,-wall['width']/2),
                        (wall['length']/2,wall['width']/2),(-wall['length']/2,wall['width']/2)]]
     ax.add_patch(Polygon(pts, color='#53606c'))
+for box in data.get('static_boxes', []):
+    x,y,yaw=box['x'],box['y'],box['yaw']
+    pts=[(x+dx*math.cos(yaw)-dy*math.sin(yaw),y+dx*math.sin(yaw)+dy*math.cos(yaw))
+         for dx,dy in [(-box['length']/2,-box['width']/2),(box['length']/2,-box['width']/2),
+                       (box['length']/2,box['width']/2),(-box['length']/2,box['width']/2)]]
+    ax.add_patch(Polygon(pts, facecolor='#ff730d', edgecolor='#26323d', linewidth=1.2, zorder=4))
+    ax.text(x,y,box['link'].replace('link_', 'S'),ha='center',va='center',fontsize=7,zorder=5)
 for color,points in data['cargo'].items():
     for i,(x,y) in enumerate(points,1):
         ax.scatter([x],[y],color=color,s=65,zorder=5)
@@ -36,7 +43,7 @@ for i,obstacle in enumerate(data['obstacles'],1):
         ax.add_patch(Rectangle((sx-side/2, sy-side/2), side, side, color='#ff730d', zorder=5))
     ax.plot([sx,ex],[sy,ey],'--',color='#af5abe',linewidth=3,zorder=3)
     ax.annotate('',xy=(ex,ey),xytext=(sx,sy),arrowprops=dict(arrowstyle='<->',color='#af5abe'))
-    ax.text((sx+ex)/2+.5,(sy+ey)/2,f'M{i}: 0.35 m/s',fontsize=9,color='#8a3298',bbox=dict(facecolor='white',edgecolor='none',alpha=.8))
+    ax.text((sx+ex)/2+.5,(sy+ey)/2,f'M{i}: {obstacle["speed"]:.2f} m/s',fontsize=9,color='#8a3298',bbox=dict(facecolor='white',edgecolor='none',alpha=.8))
 ax.scatter([0],[0],marker='*',s=150,color='#25384c',zorder=6,label='Robot start')
 if args.motion:
     motion=json.loads(args.motion.read_text())
