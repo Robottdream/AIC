@@ -27,25 +27,35 @@ class MainControllerNode(Node):
         
         # 预设位置参数
         self.RED_BLOCKS = [
-            (7.632928, 5.523903, False),
-            (9.604514, -3.707741, False),
-            (-5.735783, 5.507306, False),
-            (-8.702837, 1.000008, False),
-            (-10.748330, 4.014158, False)
+            (x, y, False) for x, y in self._position_pairs_parameter(
+                "red_block_positions", [
+                    7.632928, 5.523903,
+                    9.604514, -3.707741,
+                    -5.735783, 5.507306,
+                    -8.702837, 1.000008,
+                    -10.748330, 4.014158,
+                ])
         ]
         self.BLUE_BLOCKS = [
-            (8.464876, -7.097603, False),
-            (5.040937, -7.441163, False),
-            (-1.478995, 6.646223, False),
-            (-9.664453, -3.267239, False),
-            (-3.703343, 0.829596, False)
+            (x, y, False) for x, y in self._position_pairs_parameter(
+                "blue_block_positions", [
+                    8.464876, -7.097603,
+                    5.040937, -7.441163,
+                    -1.478995, 6.646223,
+                    -9.664453, -3.267239,
+                    -3.703343, 0.829596,
+                ])
         ]
         # Base parking poses; the arm still checks the unchanged physical zone bounds.
-        self.AREA_COORDS = {
-            "A": (2.593086, -5.970000),
-            "B": (-1.746544, -6.585499),
-            "C": (-6.873777, -7.785160)
-        }
+        self.AREA_COORDS = dict(zip(
+            ("A", "B", "C"),
+            self._position_pairs_parameter("area_parking_positions", [
+                2.593086, -5.970000,
+                -1.746544, -6.585499,
+                -6.873777, -7.785160,
+            ]),
+        ))
+        self.stable_layout_hints = self.declare_parameter("stable_layout_hints", True).value
         
         # 核心变量
         self.current_robot_pose = (0.0, 0.0)
@@ -121,6 +131,12 @@ class MainControllerNode(Node):
         self.target_area_pub.publish(Int32(data=9))
         self.number_pick_pub.publish(Int32(data=0))
     
+    def _position_pairs_parameter(self, name, default):
+        values = self.declare_parameter(name, default).value
+        if len(values) != len(default) or not all(math.isfinite(value) for value in values):
+            raise ValueError(f"{name} must contain {len(default)} finite coordinates")
+        return list(zip(values[::2], values[1::2]))
+
     # 计算两点之间的距离
     def calculate_distance(self, point1, point2):
         return math.hypot(point1[0] - point2[0], point1[1] - point2[1])
@@ -219,10 +235,11 @@ class MainControllerNode(Node):
         )
         self._plan_next_candidate(selection_id)
 
-    @staticmethod
-    def _approach_penalty(color, block_index, candidate_index):
+    def _approach_penalty(self, color, block_index, candidate_index):
         # These approaches completed the full mission without a progress
         # recovery. Keep alternatives available if the preferred path closes.
+        if not self.stable_layout_hints:
+            return 0.0
         preferred = {("red", 1): 0, ("red", 2): 2, ("blue", 4): 1}
         direction = preferred.get((color, block_index))
         return 20.0 if direction is not None and candidate_index != direction else 0.0
@@ -971,7 +988,7 @@ class MainControllerNode(Node):
         area_pos = self.current_assignment["area_pos"]
         self.area_nav_targets = [(area_pos[0], area_pos[1], 0.0)]
         # The B approach from blue_cube_5 crosses a narrow doorway.
-        if (self.current_task["to"] == "B" and self.selected_block
+        if (self.stable_layout_hints and self.current_task["to"] == "B" and self.selected_block
                 and self.selected_block[2] == "blue_cube_5"):
             self.area_nav_targets.insert(0, (-1.8, -2.8, -math.pi / 2))
         self.area_nav_target_index = 0

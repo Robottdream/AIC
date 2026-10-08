@@ -122,18 +122,23 @@ def start(headless):
         print(f'[start] {name}: {child.pid}', flush=True)
 
     try:
-        spawn('01_gazebo', ['ros2', 'launch', 'mybot', 'gazebo_world.launch.py', f'gui:={str(not headless).lower()}'])
+        world_file = os.environ.get('AIC_WORLD')
+        task_config = os.environ.get('AIC_TASK_CONFIG')
+        node_arguments = ['--ros-args', '--params-file', task_config] if task_config else []
+        spawn('01_gazebo', ['ros2', 'launch', 'mybot', 'gazebo_world.launch.py', f'gui:={str(not headless).lower()}'] + ([f'world:={world_file}'] if world_file else []))
         wait(lambda: ros_check(['topic', 'info', '/scan'], 'Publisher count: 1'), '/scan', state, 180)
         wait(controllers_ready, 'controllers', state)
         spawn('02_moveit', ['ros2', 'launch', 'mybot', 'my_moveit_rviz.launch.py', 'rviz:=false'])
         from ament_index_python.packages import get_package_share_directory
         nav = Path(get_package_share_directory('bot_navigation'))
-        spawn('03_nav2', ['ros2', 'launch', 'nav2_bringup', 'bringup_launch.py', 'use_sim_time:=true', f'map:={nav}/maps/map.yaml', f'params_file:={nav}/param/originbot_nav2.yaml'])
+        map_file = os.environ.get('AIC_MAP', str(nav / 'maps/map.yaml'))
+        nav_params = os.environ.get('AIC_NAV_PARAMS', str(nav / 'param/originbot_nav2.yaml'))
+        spawn('03_nav2', ['ros2', 'launch', 'nav2_bringup', 'bringup_launch.py', 'use_sim_time:=true', f'map:={map_file}', f'params_file:={nav_params}'])
         wait(lambda: ros_check(['lifecycle', 'get', '/bt_navigator'], 'active'), 'Nav2', state)
         spawn('04_llama', [binary, '-m', model, '-c', '2048', '--threads', '8', '--port', '8081'])
         wait(llama_ok, 'llama /health', state)
         for name, package, executable in [('05_parser', 'llama_command_parser', 'command_parser'), ('06_nav', 'nav_simple', 'simple_navigator'), ('07_arm', 'arm_action_integration', 'arm_grab_place_node'), ('08_detector', 'package_detector', 'color_detector_node'), ('09_main', 'main_controller', 'main_controller_node')]:
-            spawn(name, ['ros2', 'run', package, executable])
+            spawn(name, ['ros2', 'run', package, executable, *node_arguments] if name in ('06_nav', '07_arm', '09_main') else ['ros2', 'run', package, executable])
         spawn('10_rosbridge', ['ros2', 'launch', str(ROOT / 'tools' / 'rosbridge_safe.launch.py')])
         wait(lambda: ros_check(['topic', 'info', '/command'], 'Subscription count: 1'), '/command parser', state)
         wait(lambda: ros_check(['topic', 'info', '/nav_done_cargo'], 'Subscription count: 1'), 'arm subscriber', state)

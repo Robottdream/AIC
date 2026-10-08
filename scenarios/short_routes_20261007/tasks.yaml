@@ -1,0 +1,72 @@
+main_controller_node:
+  ros__parameters:
+    red_block_positions:
+    - -12.0
+    - 2.5
+    - -12.0
+    - -6.5
+    - -7.0
+    - -12.0
+    - 4.0
+    - -11.0
+    - 11.5
+    - 3.0
+    blue_block_positions:
+    - -9.5
+    - 0.0
+    - -8.5
+    - -4.5
+    - -3.5
+    - -12.7
+    - 11.0
+    - -9.5
+    - 8.5
+    - -2.5
+    area_parking_positions:
+    - -7.95
+    - -5.5600000000000005
+    - 6.95
+    - -5.5
+    - -2.8
+    - 3.1
+    stable_layout_hints: false
+simple_nav2_navigator:
+  ros__parameters:
+    area_parking_positions:
+    - -7.95
+    - -5.5600000000000005
+    - 6.95
+    - -5.5
+    - -2.8
+    - 3.1
+    crossing_max_wait: 12.0
+    obstacle_names:
+    - design_obstacle_left
+    - design_obstacle_right
+    obstacle_tracks:
+    - -3.65
+    - 1.0
+    - -0.9
+    - 1.0
+    - -5.6
+    - -7.06
+    - 2.7
+    - -7.06
+    obstacle_sizes:
+    - 0.5
+    - 0.5
+    obstacle_speeds:
+    - 0.35
+    - 0.35
+arm_grab_place_node:
+  ros__parameters:
+    zone_centers:
+    - -7.4
+    - -5.4
+    - 7.5
+    - -5.4
+    - -2.25
+    - 3.1
+    zone_size:
+    - 2.0
+    - 1.6

@@ -17,6 +17,22 @@ from gazebo_msgs.srv import GetEntityState, SetEntityState
 class ArmGrabPlaceNode(Node):
     def __init__(self):
         super().__init__("arm_grab_place_node")
+        # A/B/C 的真实放置区域中心按 [Ax, Ay, Bx, By, Cx, Cy] 配置。
+        zone_centers = self.declare_parameter(
+            "zone_centers",
+            [value for zone in (0, 1, 2) for value in self.ZONES[zone]],
+        ).value
+        if len(zone_centers) != 6 or not all(
+                math.isfinite(value) for value in zone_centers):
+            raise ValueError("zone_centers must contain 6 finite coordinates")
+        self.ZONES = {
+            zone: (zone_centers[2 * zone], zone_centers[2 * zone + 1])
+            for zone in (0, 1, 2)
+        }
+        zone_size = self.declare_parameter("zone_size", [1.0, 0.5]).value
+        if len(zone_size) != 2 or not all(math.isfinite(v) and v >= 0.2 for v in zone_size):
+            raise ValueError("zone_size must contain two finite dimensions >= 0.2m")
+        self.zone_half_extents = tuple(v/2 for v in zone_size)
         
         # ===================== 1. 新增：初始化状态发布器（给主控发确认信号）=====================
         self.arm_status_pub = self.create_publisher(String, "/arm_status", 10)
@@ -195,17 +211,18 @@ class ArmGrabPlaceNode(Node):
                 raise RuntimeError(response.status_message)
             position = response.state.pose.position
             center_x, center_y = self.ZONES[self.target_area]
+            half_x, half_y = self.zone_half_extents
             dx, dy = center_x - position.x, center_y - position.y
             # The cube half-width is 0.015 m. Keep another 0.03 m margin
             # so small residual base motion cannot push it beyond the board.
-            if abs(dx) <= 0.535 and abs(dy) <= 0.315:
+            if abs(dx) <= half_x + 0.035 and abs(dy) <= half_y + 0.065:
                 self.validated_release_pose = (cube, copy.deepcopy(response.state.pose), time.monotonic())
                 self.get_logger().info(
                     f"放置前实测 {cube}: ({position.x:.3f},{position.y:.3f}), "
                     f"接近目标区域，分离后进行有限落点修正")
                 self.send_detach_action(self._after_detach)
                 return
-            if abs(dx) > 0.8 or abs(dy) > 0.55:
+            if abs(dx) > half_x + 0.3 or abs(dy) > half_y + 0.3:
                 raise RuntimeError(f"物块距放置区过远: dx={dx:.3f}, dy={dy:.3f}")
             self.get_logger().warn(
                 f"放置前实测 {cube}: ({position.x:.3f},{position.y:.3f}) "
@@ -409,8 +426,9 @@ class ArmGrabPlaceNode(Node):
             # Gazebo has gravity disabled for cargo. Keep the released cube
             # fully on the 1.0 x 0.5m board if it landed just over an edge.
             cx, cy = self.ZONES[self.target_area]
-            desired_x = max(cx - 0.455, min(cx + 0.455, state.pose.position.x))
-            desired_y = max(cy - 0.205, min(cy + 0.205, state.pose.position.y))
+            half_x, half_y = getattr(self, 'zone_half_extents', (0.5, 0.25))
+            desired_x = max(cx - half_x + 0.045, min(cx + half_x - 0.045, state.pose.position.x))
+            desired_y = max(cy - half_y + 0.045, min(cy + half_y - 0.045, state.pose.position.y))
             correction = math.hypot(desired_x - state.pose.position.x,
                                     desired_y - state.pose.position.y)
             if correction > 0.11:
@@ -503,7 +521,8 @@ class ArmGrabPlaceNode(Node):
                 raise RuntimeError("无法读取最终物块位置")
             p = result.state.pose.position
             cx, cy = self.ZONES[self.target_area]
-            if abs(p.x - cx) > 0.485 or abs(p.y - cy) > 0.235 or not 0.02 <= p.z <= 0.055:
+            half_x, half_y = self.zone_half_extents
+            if abs(p.x - cx) > half_x - 0.015 or abs(p.y - cy) > half_y - 0.015 or not 0.02 <= p.z <= 0.055:
                 raise RuntimeError(f"物块最终位置不在区域内: ({p.x:.3f},{p.y:.3f},{p.z:.3f})")
             self.get_logger().info(f"放置完成并确认区域内: ({p.x:.3f},{p.y:.3f},{p.z:.3f})")
             self.is_executing = False

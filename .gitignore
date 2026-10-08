@@ -17,6 +17,9 @@ runtime/
 .pytest_cache/
 .vscode/
 .idea/
+# LibreOffice lock files and interrupted temporary writes
+.~lock.*#
+*.tmp
 
 # Generated binaries, source archives, and local backups
 *.so
