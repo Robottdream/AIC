@@ -274,13 +274,22 @@
       "foxglovePanelTitle": "3D状态显示"
     },
     "Publish!20rffgt": {
-      "buttonText": "Publish",
-      "buttonTooltip": "",
+      "buttonText": "解析正式题目",
+      "buttonTooltip": "生成解题和映射预览，核对后在下方面板确认启动",
       "advancedView": true,
-      "value": "{\n  \"data\": \"抓取两个蓝色到A 区\"\n}",
-      "foxglovePanelTitle": "对话框",
-      "topicName": "/command",
-      "datatype": "std_msgs/String"
+      "value": "{\n  \"data\": \"每个书箱有5本书籍，有故事书、科普书两种书箱。小文想要1本故事书，5本科普书；小雅想要1本故事书，他是双胞胎所以需要双倍的书；小静和小文需求一样，但少一本故事书；小豪想要5本科普书；小智想要1本故事书，5本科普书。设故事书箱数为x，科普书箱数为y，计算x、y。\\n映射规则：1\"\n}",
+      "foxglovePanelTitle": "正式题目与映射规则（截图示例）",
+      "topicName": "/competition/problem",
+      "datatype": "std_msgs/msg/String"
+    },
+    "Publish!officialStart": {
+      "buttonText": "确认并启动",
+      "buttonTooltip": "与裁判核对后，填入右侧最新预览的preview_id，再点击启动",
+      "advancedView": true,
+      "value": "{\n  \"data\": \"{\\\"preview_id\\\":\\\"填入最新预览编号\\\",\\\"confirm\\\":true}\"\n}",
+      "foxglovePanelTitle": "核对后启动（填写preview_id）",
+      "topicName": "/competition/start",
+      "datatype": "std_msgs/msg/String"
     },
     "Image!1p1fyg9": {
       "cameraState": {
@@ -494,8 +503,9 @@
       "diffMethod": "custom",
       "diffTopicPath": "",
       "showFullMessageForDiff": false,
-      "topicPath": "/chat",
-      "fontSize": 12
+      "topicPath": "/competition/preview",
+      "fontSize": 12,
+      "foxglovePanelTitle": "解题与映射预览（复制preview_id）"
     }
   },
   "globalVariables": {
@@ -508,9 +518,14 @@
   "layout": {
     "first": {
       "first": "3D!1juc55f",
-      "second": "Publish!20rffgt",
+      "second": {
+        "first": "Publish!20rffgt",
+        "second": "Publish!officialStart",
+        "direction": "column",
+        "splitPercentage": 65
+      },
       "direction": "column",
-      "splitPercentage": 79.87374494054716
+      "splitPercentage": 65
     },
     "second": {
       "first": {

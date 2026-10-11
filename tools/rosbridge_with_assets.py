@@ -1,6 +1,7 @@
 """Expose this robot's meshes and resolve its URDF for rosbridge clients only."""
 import re
 import runpy
+import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
@@ -45,6 +46,7 @@ class AssetApplication(original_application):
 
 tornado.web.Application = AssetApplication
 original_callback = MultiSubscriber.callback
+asset_port = int(os.environ.get('AIC_ROSBRIDGE_PORT', '9090'))
 
 
 def robot_callback(self, msg, callbacks=None):
@@ -53,7 +55,7 @@ def robot_callback(self, msg, callbacks=None):
         msg = deserialize_message(msg, String)
     if isinstance(msg, String) and '<robot' in msg.data:
         data = re.sub(r'package://mybot_description/meshes/',
-                      'http://127.0.0.1:9090/assets/mybot_description/meshes/', msg.data)
+                      f'http://127.0.0.1:{asset_port}/assets/mybot_description/meshes/', msg.data)
         msg = String(data=data)
     if raw:
         msg = serialize_message(msg)

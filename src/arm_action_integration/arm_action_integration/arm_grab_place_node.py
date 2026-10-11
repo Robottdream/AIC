@@ -10,13 +10,30 @@ from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import String, Int32
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from linkattacher_msgs.srv import AttachLink, DetachLink
 from gazebo_msgs.srv import GetEntityState, SetEntityState
 
 class ArmGrabPlaceNode(Node):
     def __init__(self):
         super().__init__("arm_grab_place_node")
+        # A/B/C 的真实放置区域中心按 [Ax, Ay, Bx, By, Cx, Cy] 配置。
+        zone_centers = self.declare_parameter(
+            "zone_centers",
+            [value for zone in (0, 1, 2) for value in self.ZONES[zone]],
+        ).value
+        if len(zone_centers) != 6 or not all(
+                math.isfinite(value) for value in zone_centers):
+            raise ValueError("zone_centers must contain 6 finite coordinates")
+        self.ZONES = {
+            zone: (zone_centers[2 * zone], zone_centers[2 * zone + 1])
+            for zone in (0, 1, 2)
+        }
+        zone_size = self.declare_parameter("zone_size", [1.0, 0.5]).value
+        if len(zone_size) != 2 or not all(math.isfinite(v) and v >= 0.2 for v in zone_size):
+            raise ValueError("zone_size must contain two finite dimensions >= 0.2m")
+        self.zone_half_extents = tuple(v/2 for v in zone_size)
         
         # ===================== 1. 新增：初始化状态发布器（给主控发确认信号）=====================
         self.arm_status_pub = self.create_publisher(String, "/arm_status", 10)
@@ -103,9 +120,17 @@ class ArmGrabPlaceNode(Node):
         self.base_cmd_pub = self.create_publisher(Twist, "/cmd_vel_nav", 10)
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl_pose, 10)
         self.create_subscription(Odometry, "/odom", self._on_odom, 10)
+        self.static_map = None
+        self.place_yaw_adjustments = 0
+        self.create_subscription(OccupancyGrid, "/map", self._on_static_map,
+            QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                       durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.detach_attempts = 0
         self.target_area = 9
         self.create_subscription(Int32, "/target_area", self._on_target_area, 10)
+
+    def _on_static_map(self, msg):
+        self.static_map = msg
 
     def _on_target_area(self, msg):
         self.target_area = msg.data
@@ -139,6 +164,10 @@ class ArmGrabPlaceNode(Node):
 
     def _stop_alignment(self):
         self.base_cmd_pub.publish(Twist())
+        if self.align_timer is not None:
+            self.align_timer.cancel()
+            self.destroy_timer(self.align_timer)
+            self.align_timer = None
         if self.settle_timer is not None:
             self.settle_timer.cancel()
             self.destroy_timer(self.settle_timer)
@@ -195,27 +224,139 @@ class ArmGrabPlaceNode(Node):
                 raise RuntimeError(response.status_message)
             position = response.state.pose.position
             center_x, center_y = self.ZONES[self.target_area]
+            half_x, half_y = self.zone_half_extents
             dx, dy = center_x - position.x, center_y - position.y
             # The cube half-width is 0.015 m. Keep another 0.03 m margin
             # so small residual base motion cannot push it beyond the board.
-            if abs(dx) <= 0.535 and abs(dy) <= 0.315:
+            if abs(dx) <= half_x + 0.035 and abs(dy) <= half_y + 0.065:
                 self.validated_release_pose = (cube, copy.deepcopy(response.state.pose), time.monotonic())
                 self.get_logger().info(
                     f"放置前实测 {cube}: ({position.x:.3f},{position.y:.3f}), "
                     f"接近目标区域，分离后进行有限落点修正")
                 self.send_detach_action(self._after_detach)
                 return
-            if abs(dx) > 0.8 or abs(dy) > 0.55:
+            if abs(dx) > half_x + 0.8 or abs(dy) > half_y + 0.8:
                 raise RuntimeError(f"物块距放置区过远: dx={dx:.3f}, dy={dy:.3f}")
-            self.get_logger().warn(
-                f"放置前实测 {cube}: ({position.x:.3f},{position.y:.3f}) "
-                f"不在区域内，请求底盘修正 dx={dx:.3f}, dy={dy:.3f}")
-            self.is_executing = False
-            self.current_step = 0
-            self.arm_status_pub.publish(String(data=f"place_reposition:{dx:.4f}:{dy:.4f}"))
+            # Keep the chassis parked. Try a bounded joint1 adjustment using
+            # the measured cube radius, not an assumed grasp offset.
+            request = GetEntityState.Request()
+            request.name = "six_arm"
+            request.reference_frame = "world"
+            future = self.get_state_client.call_async(request)
+            future.add_done_callback(lambda result: self._adjust_place_yaw(
+                result, cube, copy.deepcopy(position), dx, dy))
         except Exception as exc:
             self.get_logger().error(f"放置前位置检查失败: {exc}")
             self._reset_execution()
+
+    @staticmethod
+    def _placement_yaw_candidates(cube_xy, pivot_xy, center, half_extents, current_yaw):
+        """Bounded yaw candidates whose circular arc ends inside the board."""
+        values = (*cube_xy, *pivot_xy, *center, *half_extents, current_yaw)
+        if not all(math.isfinite(v) for v in values):
+            return []
+        vx, vy = cube_xy[0] - pivot_xy[0], cube_xy[1] - pivot_xy[1]
+        if not 0.1 <= math.hypot(vx, vy) <= 1.1:
+            return []
+        candidates = []
+        for step in range(-180, 181):
+            joint_yaw = step * 0.005  # +/-0.9 rad; URDF allows +/-3.14.
+            delta = joint_yaw - current_yaw
+            c, sin = math.cos(delta), math.sin(delta)
+            x = pivot_xy[0] + c*vx - sin*vy
+            y = pivot_xy[1] + sin*vx + c*vy
+            if (abs(x-center[0]) <= half_extents[0]-0.08
+                    and abs(y-center[1]) <= half_extents[1]-0.08):
+                candidates.append((abs(delta), joint_yaw))
+        return [yaw for _, yaw in sorted(candidates)]
+
+    def _arm_sweep_clear(self, cube_xy, pivot_xy, delta):
+        """Check the extended arm/cargo sweep against the static map."""
+        grid = self.static_map
+        if grid is None or grid.info.resolution <= 0:
+            return False
+        origin = grid.info.origin
+        q = origin.orientation
+        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+        c0, s0 = math.cos(yaw), math.sin(yaw)
+        vx, vy = cube_xy[0]-pivot_xy[0], cube_xy[1]-pivot_xy[1]
+        radius = math.hypot(vx, vy)
+        angle_steps = max(1, int(math.ceil(abs(delta)*radius/0.035)))
+        radial_steps = max(1, int(math.ceil(radius/0.035)))
+        for i in range(angle_steps+1):
+            angle = delta*i/angle_steps
+            c, sin = math.cos(angle), math.sin(angle)
+            for j in range(1, radial_steps+1):
+                fraction = j/radial_steps
+                if fraction*radius < 0.32:
+                    continue  # Within the already parked chassis footprint.
+                x = pivot_xy[0]+fraction*(c*vx-sin*vy)
+                y = pivot_xy[1]+fraction*(sin*vx+c*vy)
+                for ox, oy in ((0,0), (.055,0), (-.055,0), (0,.055), (0,-.055)):
+                    wx, wy = x+ox-origin.position.x, y+oy-origin.position.y
+                    gx = int(math.floor((c0*wx+s0*wy)/grid.info.resolution))
+                    gy = int(math.floor((-s0*wx+c0*wy)/grid.info.resolution))
+                    if not (0 <= gx < grid.info.width and 0 <= gy < grid.info.height):
+                        return False
+                    value = grid.data[gy*grid.info.width+gx]
+                    if value < 0 or value >= 65:
+                        return False
+        return True
+
+    def _adjust_place_yaw(self, future, cube, position, dx, dy):
+        if (not self.is_executing or self.current_task != "place"
+                or self.current_step != 3 or cube != self.attach_params["model2_name"]):
+            return
+        try:
+            response = future.result()
+            if not response.success:
+                raise RuntimeError("无法读取机械臂转轴位置")
+            # arm_base_link has zero XY offset from the model origin in this URDF.
+            pivot = response.state.pose.position
+            cube_xy, pivot_xy = (position.x, position.y), (pivot.x, pivot.y)
+            current_yaw = self.current_joint_pos[0]
+            options = self._placement_yaw_candidates(cube_xy, pivot_xy,
+                self.ZONES[self.target_area], self.zone_half_extents, current_yaw)
+            if self.place_yaw_adjustments < 2:
+                for yaw in options:
+                    if not self._arm_sweep_clear(cube_xy, pivot_xy, yaw-current_yaw):
+                        continue
+                    self.place_yaw_adjustments += 1
+                    target = list(self.current_joint_pos)
+                    target[0] = yaw
+                    self.get_logger().info(
+                        f"底盘保持停车，机械臂落点微调 joint1={yaw:.3f}rad，随后复核物块位置")
+                    if self.align_timer is None:
+                        self.align_timer = self.create_timer(0.1,
+                            lambda: self.base_cmd_pub.publish(Twist()))
+                    self.send_arm_action(target, self._check_cube_before_release)
+                    return
+            self._prepare_place_reposition(dx, dy)
+        except Exception as exc:
+            self.get_logger().error(f"放置姿态计算失败: {exc}")
+            self._reset_execution()
+
+    def _prepare_place_reposition(self, dx, dy):
+        # Do not navigate with the arm extended and the gripper open.
+        # Wait for both stow actions before notifying the task controller.
+        self._stop_alignment()
+        self.current_step = 6
+        self.reposition_actions_remaining = 2
+        def ready():
+            with self.place_release_lock:
+                if (not self.is_executing or self.current_task != "place"
+                        or self.current_step != 6):
+                    return
+                self.reposition_actions_remaining -= 1
+                if self.reposition_actions_remaining:
+                    return
+                self.is_executing = False
+                self.current_step = 0
+            self.get_logger().warn(
+                f"已收臂并闭合夹爪，请求底盘位置修正 dx={dx:.3f}, dy={dy:.3f}")
+            self.arm_status_pub.publish(String(data=f"place_reposition:{dx:.4f}:{dy:.4f}"))
+        self.send_gripper_action("close", ready)
+        self.send_arm_action(self.arm_trajectory["lift"], ready)
 
     # ===================== 6. 原有目标物块更新（保留不变）=====================
     def target_cube_callback(self, msg):
@@ -237,8 +378,10 @@ class ArmGrabPlaceNode(Node):
         point_start.time_from_start.nanosec = 500
         point_target = JointTrajectoryPoint()
         point_target.positions = target_joint_positions
-        point_target.time_from_start.sec = 1
-        point_target.time_from_start.nanosec = 0
+        # Limit the base joint's sweep speed, including return-to-stow motions.
+        duration = max(1.0, abs(target_joint_positions[0]-point_start.positions[0])/0.55)
+        point_target.time_from_start.sec = int(duration)
+        point_target.time_from_start.nanosec = int((duration-int(duration))*1_000_000_000)
         trajectory.points = [point_start, point_target]
         goal_msg.trajectory = trajectory
         self.current_joint_pos = target_joint_positions
@@ -409,8 +552,9 @@ class ArmGrabPlaceNode(Node):
             # Gazebo has gravity disabled for cargo. Keep the released cube
             # fully on the 1.0 x 0.5m board if it landed just over an edge.
             cx, cy = self.ZONES[self.target_area]
-            desired_x = max(cx - 0.455, min(cx + 0.455, state.pose.position.x))
-            desired_y = max(cy - 0.205, min(cy + 0.205, state.pose.position.y))
+            half_x, half_y = getattr(self, 'zone_half_extents', (0.5, 0.25))
+            desired_x = max(cx - half_x + 0.045, min(cx + half_x - 0.045, state.pose.position.x))
+            desired_y = max(cy - half_y + 0.045, min(cy + half_y - 0.045, state.pose.position.y))
             correction = math.hypot(desired_x - state.pose.position.x,
                                     desired_y - state.pose.position.y)
             if correction > 0.11:
@@ -503,7 +647,8 @@ class ArmGrabPlaceNode(Node):
                 raise RuntimeError("无法读取最终物块位置")
             p = result.state.pose.position
             cx, cy = self.ZONES[self.target_area]
-            if abs(p.x - cx) > 0.485 or abs(p.y - cy) > 0.235 or not 0.02 <= p.z <= 0.055:
+            half_x, half_y = self.zone_half_extents
+            if abs(p.x - cx) > half_x - 0.015 or abs(p.y - cy) > half_y - 0.015 or not 0.02 <= p.z <= 0.055:
                 raise RuntimeError(f"物块最终位置不在区域内: ({p.x:.3f},{p.y:.3f},{p.z:.3f})")
             self.get_logger().info(f"放置完成并确认区域内: ({p.x:.3f},{p.y:.3f},{p.z:.3f})")
             self.is_executing = False
@@ -537,6 +682,7 @@ class ArmGrabPlaceNode(Node):
         self._place_proceed()
 
     def _after_arm_lift_place(self):
+        self._stop_alignment()
         self._place_proceed()
 
     def _reset_execution(self):
@@ -570,6 +716,7 @@ class ArmGrabPlaceNode(Node):
             self.is_executing = True
             self.current_task = "place"
             self.detach_attempts = 0
+            self.place_yaw_adjustments = 0
             self.current_step = 1
             self.place_arm_ready = False
             self.place_gripper_ready = False

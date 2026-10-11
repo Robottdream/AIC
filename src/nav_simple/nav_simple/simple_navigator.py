@@ -2,16 +2,21 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Bool
 from nav2_msgs.action import NavigateToPose, ComputePathToPose
 from geometry_msgs.msg import Pose, PoseStamped, Quaternion
+from nav_msgs.msg import OccupancyGrid
+from gazebo_msgs.msg import ModelStates
+from rcl_interfaces.srv import SetParametersAtomically
 from tf_transformations import quaternion_from_euler
 import json
 import math
 import time
 from collections import deque
+from nav_simple.trajectory_prediction import crossing_conflicts
+from nav_simple.crossing_passage import choose_passage, track_distance, static_clearance
 
 class SimpleNav2Navigator(Node):
     def __init__(self):
@@ -55,6 +60,18 @@ class SimpleNav2Navigator(Node):
             "B": {"x": -1.746544, "y": -6.485499, "yaw": 0.0},
             "C": {"x": -6.873777, "y": -7.785160, "yaw": 0.0}
         }
+        # A/B/C 的停车位置按 [Ax, Ay, Bx, By, Cx, Cy] 配置。
+        parking_positions = self.declare_parameter(
+            "area_parking_positions",
+            [self.area_coords[area][axis]
+             for area in ("A", "B", "C") for axis in ("x", "y")],
+        ).value
+        if len(parking_positions) != 6 or not all(
+                math.isfinite(value) for value in parking_positions):
+            raise ValueError("area_parking_positions must contain 6 finite coordinates")
+        for index, area in enumerate(("A", "B", "C")):
+            self.area_coords[area]["x"] = parking_positions[2 * index]
+            self.area_coords[area]["y"] = parking_positions[2 * index + 1]
         
         # 导航状态
         self.current_goal_handle = None
@@ -71,6 +88,45 @@ class SimpleNav2Navigator(Node):
             self.declare_parameter("crossing_cruise_speed", 2.2).value))
         self.crossing_acceleration = max(0.1, float(
             self.declare_parameter("crossing_acceleration", 3.5).value))
+        names = self.declare_parameter("obstacle_names", Parameter.Type.STRING_ARRAY).value or []
+        tracks = self.declare_parameter("obstacle_tracks", Parameter.Type.DOUBLE_ARRAY).value or []
+        sizes = self.declare_parameter("obstacle_sizes", Parameter.Type.DOUBLE_ARRAY).value or []
+        speeds = self.declare_parameter("obstacle_speeds", Parameter.Type.DOUBLE_ARRAY).value or []
+        if len(tracks) != 4*len(names) or len(sizes) != len(names) or len(speeds) != len(names):
+            raise ValueError("Each obstacle requires four track coordinates, size and speed")
+        if len(set(names)) != len(names) or not all(math.isfinite(v) for v in [*tracks, *sizes, *speeds]):
+            raise ValueError("Obstacle names must be unique and track values finite")
+        self.scene_tracks = []
+        self.scene_obstacle_samples = {}
+        self.static_map = None
+        self.world_pose = None
+        self.safe_route = []
+        self.route_stage = None
+        self.routed_tracks = set()
+        self.guard_canceling = False
+        self.crossing_retry = 0
+        self.controller_parameters = self.create_client(
+            SetParametersAtomically, '/controller_server/set_parameters_atomically')
+        self.controller_profile = None
+        self.controller_profile_pending = False
+        self.controller_profile_retry_at = 0.
+        self.create_timer(.2, self._update_controller_profile)
+        self.create_subscription(OccupancyGrid, '/map', self._map_callback,
+            QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                       durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.create_subscription(ModelStates, '/model_states', self._world_callback,
+                                 qos_profile_sensor_data)
+        self.create_timer(.05, self._check_crossing_entry)
+        self.prediction_last_log = -math.inf
+        for i, name in enumerate(names):
+            points = tuple(tracks[4*i:4*i+4])
+            if sizes[i] <= 0 or speeds[i] <= 0 or math.hypot(points[2]-points[0], points[3]-points[1]) <= .4:
+                raise ValueError("Obstacle size/speed must be positive and track longer than 0.4 m")
+            self.scene_tracks.append(dict(name=name, points=points, size=sizes[i], speed=speeds[i]))
+            self.scene_obstacle_samples[name] = deque(maxlen=50)
+            self.create_subscription(Pose, f"/{name}/current_pose",
+                lambda msg, name=name: self.scene_obstacle_callback(name, msg), qos_profile_sensor_data)
+            self.get_logger().info(f"已接入障碍轨迹预测: {name} {points}, 速度={speeds[i]:.2f}m/s")
         
         self.get_logger().info("增强版Nav2导航节点启动成功！")
         self.get_logger().info("支持：紧急停止、路径中断")
@@ -78,6 +134,132 @@ class SimpleNav2Navigator(Node):
 
     def cube_callback(self, msg):
         self.current_target_cube = msg.data.strip()
+
+    def _map_callback(self, msg):
+        self.static_map = msg
+
+    def _world_callback(self, msg):
+        if 'six_arm' in msg.name:
+            p = msg.pose[msg.name.index('six_arm')].position
+            self.world_pose = (self.get_clock().now().nanoseconds*1e-9, p.x, p.y)
+
+    def _update_controller_profile(self, ready=None):
+        now = self.get_clock().now().nanoseconds*1e-9
+        if (self.world_pose is None or now-self.world_pose[0] > .25
+                or self.static_map is None or self.goal_pose is None):
+            if ready is not None:
+                ready()
+            return
+        clearance = static_clearance(self.static_map, self.world_pose[1:])
+        # Hysteresis prevents rapid parameter changes at a corridor entrance.
+        near = clearance < (1.05 if self.controller_profile == 'near' else .80)
+        crossing = self.route_stage is not None and self.route_stage['kind'] == 'cross'
+        # Set the crossing profile before departure, rather than changing it
+        # midway. Actual cruise now matches the conservative timing model.
+        profile = 'cross' if crossing else ('near' if near else 'open')
+        if profile == self.controller_profile:
+            if ready is not None:
+                ready()
+            return
+        if self.controller_profile_pending:
+            # A start request must wait for the outstanding controller update.
+            if ready is not None:
+                self.controller_profile_future.add_done_callback(
+                    lambda _: self._update_controller_profile(ready))
+            return
+        if (now < self.controller_profile_retry_at
+                or not self.controller_parameters.service_is_ready()):
+            if ready is not None:
+                ready()
+            return
+        constrained = near or crossing
+        values = {'FollowPath.desired_linear_vel': .8 if crossing else (1.2 if near else self.crossing_cruise_speed),
+                  'FollowPath.max_lookahead_dist': .65 if constrained else 1.5,
+                  'FollowPath.lookahead_time': .6 if constrained else 1.0}
+        request = SetParametersAtomically.Request()
+        request.parameters = [Parameter(name, value=value).to_parameter_msg()
+                              for name, value in values.items()]
+        self.controller_profile_pending = True
+        self.controller_profile_future = self.controller_parameters.call_async(request)
+        def applied(future):
+            self.controller_profile_pending = False
+            try:
+                result = future.result().result
+                if not result.successful:
+                    raise RuntimeError(result.reason)
+                self.controller_profile = profile
+                self.get_logger().info(f'导航转弯配置={profile}, 静态净距={clearance:.2f}m, '
+                                       f'直行目标={values["FollowPath.desired_linear_vel"]:.2f}m/s')
+            except Exception as error:
+                self.controller_profile_retry_at = now+2.
+                self.get_logger().warn(f'导航转弯参数更新失败: {error}')
+            if ready is not None:
+                ready()
+        self.controller_profile_future.add_done_callback(applied)
+
+    def _install_crossing_route(self, path, nav_goal):
+        if self.route_stage is not None and self.route_stage['kind'] != 'final':
+            return False
+        points = [(p.pose.position.x, p.pose.position.y) for p in path.poses]
+        for track in self.scene_tracks:
+            if track['name'] in self.routed_tracks:
+                continue
+            passage = choose_passage(points, track, self.static_map)
+            if passage is None:
+                continue
+            self.routed_tracks.add(track['name'])
+            p, q = nav_goal.pose.pose.position, nav_goal.pose.pose.orientation
+            yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+            entry, exit = passage['entry'], passage['exit']
+            final = dict(kind='final', target=(p.x,p.y,yaw))
+            remaining = self.safe_route[1:] if self.safe_route else []
+            self.safe_route = [dict(kind='entry', target=(*entry,passage['yaw']), passage=passage),
+                dict(kind='cross', target=(*exit,passage['yaw']), passage=passage), final, *remaining]
+            mode = '端点外绕行' if passage.get('bypass') else '安全穿越'
+            self.get_logger().info(f"{mode} {track['name']}: 轨道外等待点={entry}, 出口={exit}")
+            self._send_route_stage()
+            return True
+        return False
+
+    def _send_route_stage(self):
+        self.route_stage = self.safe_route[0]
+        self.send_goal(*self.route_stage['target'], self.request_id)
+
+    def _check_crossing_entry(self):
+        stage = self.route_stage
+        if (stage is None or stage['kind'] != 'cross' or self.guard_canceling
+                or self.current_goal_handle is None or self.emergency_stop_active):
+            return
+        now = self.get_clock().now().nanoseconds*1e-9
+        if self.world_pose is None or now-self.world_pose[0] > .25:
+            return
+        position = self.world_pose[1:]
+        passage = stage['passage']
+        # Revalidate while braking still leaves the chassis outside the swept
+        # area. Never use an intentional waiting stop inside that area.
+        if track_distance(position, passage['track']) < 1.10:
+            return
+        if not crossing_conflicts([position, passage['exit']], [passage['track']],
+                self.scene_obstacle_samples, now, 0., .8, 3.5):
+            return
+        self.crossing_retry += 1
+        self.guard_canceling = True
+        self.request_id += 1
+        request_id = self.request_id
+        self.get_logger().warn('穿越前预测更新，取消进入并回到轨道外等待点')
+        self.current_goal_handle.cancel_goal_async()
+        def stopped(_):
+            if request_id != self.request_id:
+                return
+            self.current_goal_handle = None
+            self.guard_canceling = False
+            if self.crossing_retry > 4:
+                self.status_pub.publish(String(data='failed: crossing_entry_unstable'))
+                return
+            self.safe_route.insert(0, dict(kind='entry',
+                target=(*passage['entry'], passage['yaw']), passage=passage))
+            self._send_route_stage()
+        self._result_future.add_done_callback(stopped)
 
     def obstacle_callback(self, msg):
         now = self.get_clock().now().nanoseconds * 1e-9
@@ -94,6 +276,53 @@ class SimpleNav2Navigator(Node):
             self.pending_start_timer.cancel()
             self.destroy_timer(self.pending_start_timer)
             self.pending_start_timer = None
+
+    def scene_obstacle_callback(self, name, msg):
+        now = self.get_clock().now().nanoseconds*1e-9
+        x, y = msg.position.x, msg.position.y
+        if not math.isfinite(x) or not math.isfinite(y):
+            return
+        samples = self.scene_obstacle_samples[name]
+        if samples and now < samples[-1][0]:
+            samples.clear()
+        if not samples or now-samples[-1][0] >= .05:
+            samples.append((now, x, y))
+
+    def _scene_crossing_wait(self, path):
+        points = [(p.pose.position.x, p.pose.position.y) for p in path.poses]
+        now = self.get_clock().now().nanoseconds*1e-9
+        crossing = self.route_stage is not None and self.route_stage['kind'] == 'cross'
+        straight = None
+        if crossing:
+            # Obstacle samples are Gazebo world coordinates. Use the same
+            # measured start and straight corridor as the live entry guard.
+            if self.world_pose is None or now-self.world_pose[0] > .25:
+                return .25
+            straight = [self.world_pose[1:], self.route_stage['passage']['exit']]
+        tracks = [self.route_stage['passage']['track']] if crossing else self.scene_tracks
+        speed = .8 if crossing else self.crossing_cruise_speed
+        conflicts = crossing_conflicts(points, tracks, self.scene_obstacle_samples,
+            now, 0., speed, self.crossing_acceleration)
+        if straight is not None:
+            conflicts |= crossing_conflicts(straight, tracks,
+                self.scene_obstacle_samples, now, 0., speed, self.crossing_acceleration)
+        if not conflicts:
+            return 0.
+        for tick in range(1, int(self.crossing_max_wait/.25)+1):
+            delay = tick*.25
+            if (not crossing_conflicts(points, tracks, self.scene_obstacle_samples,
+                    now, delay, speed, self.crossing_acceleration)
+                    and (straight is None or not crossing_conflicts(straight, tracks,
+                        self.scene_obstacle_samples, now, delay, speed, self.crossing_acceleration))):
+                if now-self.prediction_last_log >= 1.:
+                    self.get_logger().info(f"二维轨迹预测冲突: {','.join(sorted(conflicts))}, 建议等待={delay:.2f}s")
+                    self.prediction_last_log = now
+                return delay
+        # Keep the start gate closed until it is safe or its bounded timer fails.
+        if now-self.prediction_last_log >= 1.:
+            self.get_logger().warn(f"二维轨迹交叉暂被占用: {','.join(sorted(conflicts))}")
+            self.prediction_last_log = now
+        return .25
 
     @staticmethod
     def _predicted_obstacle_y(y, velocity, seconds):
@@ -112,6 +341,8 @@ class SimpleNav2Navigator(Node):
 
     def _crossing_wait(self, nav_goal, path):
         """Estimate a short wait when a planned path crosses obstacle3's track."""
+        if getattr(self, 'scene_tracks', None):
+            return self._scene_crossing_wait(path)
         if len(self.obstacle_samples) < 2:
             return 0.0
         now = self.get_clock().now().nanoseconds * 1e-9
@@ -214,6 +445,11 @@ class SimpleNav2Navigator(Node):
             self._cancel_pending_start()
             self.request_id += 1
             request_id = self.request_id
+            self.safe_route = []
+            self.route_stage = None
+            self.routed_tracks = set()
+            self.crossing_retry = 0
+            self.guard_canceling = False
             # 取消当前导航（如果有）
             if self.current_goal_handle:
                 self.get_logger().info("取消当前导航任务")
@@ -305,20 +541,31 @@ class SimpleNav2Navigator(Node):
                 self.get_logger().warn("目标点没有有效路径")
                 self.status_pub.publish(String(data="failed: no_path"))
                 return
+            if self._install_crossing_route(result.result.path, nav_goal):
+                return
             wait_seconds = self._crossing_wait(nav_goal, result.result.path)
             if wait_seconds > 0.0:
-                deadline = self.get_clock().now().nanoseconds * 1e-9 + wait_seconds
+                scene_prediction = bool(getattr(self, 'scene_tracks', None))
+                waiting_started = self.get_clock().now().nanoseconds * 1e-9
+                deadline = waiting_started + (self.crossing_max_wait if scene_prediction else wait_seconds)
                 def release():
                     if request_id != self.request_id or self.emergency_stop_active:
                         self._cancel_pending_start()
                         return
                     remaining = self._crossing_wait(nav_goal, result.result.path)
                     if remaining == 0.0:
+                        if scene_prediction:
+                            waited = self.get_clock().now().nanoseconds*1e-9-waiting_started
+                            self.get_logger().info(f"轨迹预测放行，实际等待={waited:.2f}s")
                         self._cancel_pending_start()
                         self._start_navigation(nav_goal, request_id)
                     elif self.get_clock().now().nanoseconds * 1e-9 >= deadline:
                         self._cancel_pending_start()
-                        self._start_navigation(nav_goal, request_id)
+                        if scene_prediction:
+                            self.get_logger().warn("轨迹预测等待超时，拒绝直接穿过预测冲突")
+                            self.status_pub.publish(String(data="failed: predicted_crossing_blocked"))
+                        else:
+                            self._start_navigation(nav_goal, request_id)
                 self.pending_start_timer = self.create_timer(0.25, release)
             else:
                 self._start_navigation(nav_goal, request_id)
@@ -327,6 +574,12 @@ class SimpleNav2Navigator(Node):
             self.status_pub.publish(String(data="failed: planning_error"))
 
     def _start_navigation(self, nav_goal, request_id):
+        self._update_controller_profile(
+            lambda: self._launch_navigation(nav_goal, request_id))
+
+    def _launch_navigation(self, nav_goal, request_id):
+        if request_id != self.request_id or self.emergency_stop_active:
+            return
         self.get_logger().info("路径检查通过，开始导航")
         nav_future = self.nav_client.send_goal_async(
             nav_goal, feedback_callback=lambda msg: self.feedback_callback(msg, request_id)
@@ -388,6 +641,12 @@ class SimpleNav2Navigator(Node):
             self.current_goal_handle = None
             
             if status == GoalStatus.STATUS_SUCCEEDED:
+                if self.safe_route:
+                    self.safe_route.pop(0)
+                    if self.safe_route:
+                        self._send_route_stage()
+                        return
+                    self.route_stage = None
                 if self.near_goal_started is not None:
                     elapsed = time.monotonic() - self.near_goal_started
                     self.get_logger().info(f"目标末段耗时：{elapsed:.2f}s")

@@ -1,0 +1,12 @@
+main_controller_node:
+  ros__parameters:
+    red_block_positions: [-1.5, 1.0, -1.6, 1.0, -1.7, 1.0, -1.8, 1.0, -1.9, 1.0]
+    blue_block_positions: [-1.5, -1.0, -1.6, -1.0, -1.7, -1.0, -1.8, -1.0, -1.9, -1.0]
+    area_parking_positions: [2.45, 0.84, 2.45, -0.1, 2.45, -1.0]
+    stable_layout_hints: false
+simple_nav2_navigator:
+  ros__parameters:
+    area_parking_positions: [2.45, 0.84, 2.45, -0.1, 2.45, -1.0]
+arm_grab_place_node:
+  ros__parameters:
+    zone_centers: [3.0, 1.0, 3.0, 0.0, 3.0, -1.0]

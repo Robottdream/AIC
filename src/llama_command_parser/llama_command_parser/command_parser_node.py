@@ -4,6 +4,9 @@ from std_msgs.msg import String, Int32
 import requests
 import json
 import re
+import time
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
+from .competition_rules import CompetitionSession, parse_input
 
 class LlamaCommandParser(Node):
     def __init__(self):
@@ -38,11 +41,111 @@ class LlamaCommandParser(Node):
             self.chat_callback,
             10
         )
+        self.competition_session = CompetitionSession()
+        self.competition_rule = self.declare_parameter('competition_rule', 1).value
+        self.controller_ready = None
+        self.controller_ready_at = 0.0
+        retained = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.preview_pub = self.create_publisher(String, '/competition/preview', retained)
+        self.competition_status_pub = self.create_publisher(String, '/competition/status', retained)
+        self.problem_sub = self.create_subscription(
+            String, '/competition/problem', self.problem_callback, 10)
+        self.start_sub = self.create_subscription(
+            String, '/competition/start', self.competition_start_callback, 10)
+        self.ready_sub = self.create_subscription(
+            String, '/competition/ready', self.competition_ready_callback, 10)
+        self.publish_competition_status('waiting_problem')
         self.get_logger().info("指令解析节点启动（话题分离+ID过滤，符合竞赛要求）")
+
+    def publish_competition_status(self, state, **details):
+        self.competition_status_pub.publish(String(data=json.dumps(
+            dict(state=state, **details), ensure_ascii=False)))
+
+    def competition_ready_callback(self, msg):
+        try:
+            payload = json.loads(msg.data)
+            if not isinstance(payload, dict) or type(payload.get('ready')) is not bool:
+                return
+            inventory = payload['inventory']
+            if any(type(inventory.get(c)) is not int or inventory[c] < 0
+                   for c in ('red', 'blue')):
+                return
+            self.controller_ready = payload
+            self.controller_ready_at = time.monotonic()
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return
+
+    def fresh_controller_state(self):
+        if self.controller_ready is None or time.monotonic() - self.controller_ready_at > 5.0:
+            raise ValueError('未收到新鲜的主控状态，请先启动程序并等待话题连接')
+        return self.controller_ready
+
+    def competition_model_check(self, preview):
+        # The small local model does not reliably solve arithmetic. Give it the
+        # verified answer and compare its mapping with the deterministic result.
+        tasks = preview['tasks']
+        instruction = '，'.join(
+            f"抓取{t['num']}个{'红色' if t['color'] == 'red' else '蓝色'}物块去{t['to']}区"
+            for t in tasks)
+        prompt = ('只返回JSON数组，每项包含color(red或blue)、num(整数)、to(A/B/C)。'
+                  '保持输入顺序。例：抓取1个红色物块去C区，'
+                  '输出[{"color":"red","num":1,"to":"C"}]。\n'
+                  f"已核验数学答案：{json.dumps(preview['solution']['answers'])}。\n"
+                  f"映射规则：{preview['rule_text']}。\n搬运指令：{instruction}\n输出：")
+        response = requests.post(self.llama_server_url,
+                                 json=dict(prompt=prompt, **self.model_params), timeout=30)
+        response.raise_for_status()
+        raw = response.json().get('content', '').strip()
+        preview['llm_raw'] = raw
+        try:
+            parsed = self.clean_and_parse_json(raw, 0)
+            preview['llm_matches'] = parsed == tasks
+        except ValueError:
+            preview['llm_matches'] = False
+        if not preview['llm_matches']:
+            preview['warning'] = '大模型映射结果不一致；预览采用代码核验结果，请逐项核对'
+
+    def problem_callback(self, msg):
+        self.competition_session.pending = None
+        try:
+            problem, rule = parse_input(msg.data, self.competition_rule)
+            state = self.fresh_controller_state()
+            if not state['ready']:
+                raise ValueError('主控正在执行任务，请完成后再准备正式题目')
+            preview = self.competition_session.prepare(problem, rule, state['inventory'])
+            self.publish_competition_status('solving')
+            self.competition_model_check(preview)
+            self.preview_pub.publish(String(data=json.dumps(preview, ensure_ascii=False)))
+            self.publish_competition_status('awaiting_confirmation',
+                                            preview_id=preview['preview_id'])
+        except Exception as exc:
+            self.competition_session.pending = None
+            self.preview_pub.publish(String(data=json.dumps(
+                dict(state='error', error=str(exc)), ensure_ascii=False)))
+            self.publish_competition_status('error', error=str(exc))
+            self.get_logger().error(f'正式题目准备失败：{exc}')
+
+    def competition_start_callback(self, msg):
+        try:
+            command = json.loads(msg.data)
+            state = self.fresh_controller_state()
+            tasks = self.competition_session.confirm(
+                command.get('preview_id'), command.get('confirm'),
+                state['ready'], state['inventory'])
+            self.latest_chat_msg.data = json.dumps(tasks, ensure_ascii=False)
+            self.chat_pub.publish(self.latest_chat_msg)
+            self.publish_competition_status('started', tasks=tasks,
+                                            preview_id=command['preview_id'])
+        except Exception as exc:
+            self.publish_competition_status('start_rejected', error=str(exc))
+            self.get_logger().warn(f'正式任务未启动：{exc}')
 
     def chat_callback(self, msg):
         """新命令触发：生成新ID→终止旧任务→仅处理最新任务"""
         try:
+            # A legacy command also invalidates any unstarted official preview.
+            self.competition_session.pending = None
             # 步骤1：提取纯命令文本（兼容JSON封装/纯文本）
             task_text = msg.data
             try:

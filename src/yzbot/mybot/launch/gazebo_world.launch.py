@@ -26,11 +26,12 @@ def generate_launch_description():
     pkg_share = FindPackageShare(package=package_name).find(package_name) 
     urdf_model_path = os.path.join(pkg_share, f'urdf/{urdf_name}')
     world_file_path = os.path.join(pkg_share, f'worlds/{world_file_path}')
+    world_argument = LaunchConfiguration('world')
  
     # Start Gazebo server
     start_gazebo_cmd = ExecuteProcess(
         cmd=['gzserver', '--verbose',
-             world_file_path,
+             world_argument,
              '-s', 'libgazebo_ros_init.so',
              '-s', 'libgazebo_ros_factory.so'],
         output='screen')
@@ -122,6 +123,7 @@ def generate_launch_description():
     
     ld = LaunchDescription()
     ld.add_action(DeclareLaunchArgument('gui', default_value='true'))
+    ld.add_action(DeclareLaunchArgument('world', default_value=world_file_path))
  
     ld.add_action(close_evt1)
     ld.add_action(close_evt2)

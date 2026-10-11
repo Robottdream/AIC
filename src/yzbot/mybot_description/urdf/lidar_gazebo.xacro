@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="laser">
 
     <xacro:macro name="lidar"
-        params="prefix:=laser gz_visualize:=false range_min:=0.5 range_max:=30.0">
+        params="prefix:=laser gz_visualize:=false range_min:=0.5 range_max:=30.0 update_rate:=10">
         <!-- Create laser reference frame -->
         <link name="${prefix}_link">
             <inertial>
@@ -35,7 +35,7 @@
 
         <gazebo reference="${prefix}_link">
             <sensor type="ray" name="lidar">
-                <update_rate>10</update_rate>
+                <update_rate>${update_rate}</update_rate>
                 <visualize>${gz_visualize}</visualize>
                 <ray>
                     <scan>

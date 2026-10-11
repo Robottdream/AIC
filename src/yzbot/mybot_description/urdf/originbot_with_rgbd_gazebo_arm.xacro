@@ -47,7 +47,8 @@
         <child link="laser_link" />
     </joint>
 
-    <xacro:lidar prefix="laser" gz_visualize="false" range_min="0.5" />
+    <!-- Keep near obstacles visible before they reach the base footprint. -->
+    <xacro:lidar prefix="laser" gz_visualize="false" range_min="0.30" update_rate="20" />
     <!-- <xacro:lidar prefix="laser" gz_visualize="false" range_min="${robot_radius + safety_margin}" /> -->
     <!-- <xacro:lidar prefix="laser" gz_visualize="false" range_min="${robot_radius + safety_margin}" /> -->
 

@@ -1,0 +1,14 @@
+{
+  "source_usb": "/media/root123/f353211b-2e85-493d-ae8f-0a0003ce5efb/home/ros/dev_ws/src/yzbot",
+  "original_files": {
+    "offic_room.world": "efad47cda9011a69420f3b3d6508d4f6cabc002a1670a7623acf701a94b292a5",
+    "mapn3.pgm": "895646aab27ef73e92c6b3fc82f2cf6ac55bf7ef1aaff1af84eabfd0a20a1c7d",
+    "mapn3.yaml": "8c54c38861e57a7179645c3775323ec3090f8d8a34e20fbd8d6bdae91d7d3e52"
+  },
+  "test_adjustments": [
+    "cargo physical definitions from current stable world; USB poses preserved",
+    "current stable ODE physics; imported wall and obstacle geometry preserved",
+    "gazebo_ros_state service plugin added",
+    "saved simulation state removed to use explicit spawn poses"
+  ]
+}

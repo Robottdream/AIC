@@ -25,6 +25,7 @@ namespace gazebo
         double end_y;
         bool moving_to_end;
         double last_print_time = 0.0;
+        ignition::math::Quaterniond upright_rotation;
         
         std::string log_prefix;
         
@@ -61,6 +62,10 @@ namespace gazebo
             this->end_y = _sdf->Get<double>("end_y", 0.0).first;
             
             this->moving_to_end = true;
+            // This obstacle follows a prescribed planar trajectory. Hold its
+            // initial heading with gradual angular feedback, not pose resets.
+            this->upright_rotation = ignition::math::Quaterniond(
+                0.0, 0.0, this->model->WorldPose().Rot().Yaw());
             
             // 输出参数信息
             std::cout << this->log_prefix << "Parameters:" << std::endl;
@@ -108,6 +113,7 @@ namespace gazebo
                 // 获取当前状态
                 ignition::math::Pose3d pose = this->model->WorldPose();
                 ignition::math::Vector3d linear_vel = this->link->WorldLinearVel();
+                this->MaintainUpright(pose);
                 
                 double current_x = pose.Pos().X();
                 double current_y = pose.Pos().Y();
@@ -173,8 +179,10 @@ namespace gazebo
                     desired_vx *= this->speed / commanded_speed;
                     desired_vy *= this->speed / commanded_speed;
                 }
-                this->link->SetLinearVel(ignition::math::Vector3d(desired_vx, desired_vy, 0.0));
-                this->link->SetAngularVel(ignition::math::Vector3d::Zero);
+                // Leave gravity and floor contact in control of vertical
+                // motion. Zeroing Vz every frame can keep a tipped cube raised.
+                this->link->SetLinearVel(ignition::math::Vector3d(
+                    desired_vx, desired_vy, linear_vel.Z()));
 
                 double current_time = _info.simTime.Double();
                 // 定期输出状态
@@ -189,6 +197,24 @@ namespace gazebo
             {
                 std::cerr << this->log_prefix << "ERROR in OnUpdate: " << e.what() << std::endl;
             }
+        }
+
+        void MaintainUpright(const ignition::math::Pose3d& pose)
+        {
+            // World-frame shortest quaternion error. Zero angular velocity
+            // only freezes an existing tilt; feedback returns it to upright.
+            ignition::math::Quaterniond error =
+                this->upright_rotation * pose.Rot().Inverse();
+            error.Normalize();
+            const double sign = error.W() < 0.0 ? -1.0 : 1.0;
+            ignition::math::Vector3d angular_velocity(
+                8.0 * sign * error.X(),
+                8.0 * sign * error.Y(),
+                8.0 * sign * error.Z());
+            const double magnitude = angular_velocity.Length();
+            if (magnitude > 1.0)
+                angular_velocity /= magnitude;
+            this->link->SetAngularVel(angular_velocity);
         }
         
         void PublishPose(const ignition::math::Pose3d& pose)
@@ -232,6 +258,8 @@ namespace gazebo
                       << "Z: " << pose.Pos().Z() << "m | "
                       << "Vxy: " << std::hypot(linear_vel.X(), linear_vel.Y()) << "m/s | "
                       << "Vz: " << linear_vel.Z() << "m/s | "
+                      << "Roll/Pitch: " << pose.Rot().Roll() << ","
+                      << pose.Rot().Pitch() << "rad | "
                       << "To" << target_str << ": " << distance << "m" << std::endl;
         }
         

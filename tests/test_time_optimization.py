@@ -168,6 +168,7 @@ class TimingTests(unittest.TestCase):
         node.get_logger = lambda: NS(error=lambda *_: None)
         waits = iter([4., 0.])
         node._crossing_wait = lambda *_: next(waits)
+        node._install_crossing_route = lambda *_: False
         callbacks, started, canceled = [], [], []
         node.create_timer = lambda period, callback: callbacks.append(callback)
         node._cancel_pending_start = lambda: canceled.append(True)
