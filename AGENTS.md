@@ -57,3 +57,12 @@ BT请求确认20→200毫秒，主控B底盘停车目标Y向内偏置0.10 m，�
 - 本 worktree 与 `/home/polarbear/ws_aic` 是不同副本，同步前明确目标，不互相覆盖。
 - shell 维护文件使用 LF。Windows Git 管理本 worktree，WSL 只执行构建与运行。
 - 禁止未经审阅的 git restore .、git checkout . 和 git clean -fdx。
+## 当前运行配置（2026-10-12）
+
+当前主入口和目录说明见 `README.md`；上面的 stable 日期记录作为历史验证保留。
+默认场景为 `scenarios/short_routes_20261007`，主入口保持 world/map/tasks/nav2 一致。
+本轮保留角速度4 rad/s、角加速度10 rad/s²、单轮转矩20 N·m及关闭单轮加速度限幅。
+十个0.1 kg、3 cm货物的主惯量从缺省1修正为0.000015 kg·m²，轮子质量保持1 kg。
+五件214.19墙钟秒/167.4仿真秒完成、区域与高度均合格，最大观测倾角0.0561°；46项回归通过。
+该结果仅为一轮验证，详见 `docs/cargo-inertia-and-turning-20261012.md`。
+“源码（国赛）”已删除；使用根目录入口，不重新引入旧dev_ws启动脚本。
