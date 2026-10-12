@@ -26,12 +26,12 @@ class SimpleNav2Navigator(Node):
         # 初始化Nav2动作客户端
         self.nav_client = ActionClient(self, NavigateToPose, "/navigate_to_pose")
         self.plan_client = ActionClient(self, ComputePathToPose, "/compute_path_to_pose")
-        if not self.nav_client.wait_for_server(timeout_sec=10.0):
+        if not self.nav_client.wait_for_server(timeout_sec=40.0):
             self.get_logger().error("Nav2服务未启动！请先启动导航栈")
             rclpy.shutdown()
             return
         
-        if not self.plan_client.wait_for_server(timeout_sec=10.0):
+        if not self.plan_client.wait_for_server(timeout_sec=40.0):
             self.get_logger().error("Nav2路径规划服务未启动！")
             rclpy.shutdown()
             return

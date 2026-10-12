@@ -1300,7 +1300,7 @@
     "design_obstacle_left": 0.612031168231568,
     "design_obstacle_right": 0.694016829191036
   },
-  "cargo_physics": "unchanged current stable definitions",
+  "cargo_physics": "existing mass/geometry/gravity/contact; explicit uniform-box inertia from mass and size",
   "min_obstacle_surface_to_static_box_m": {
     "design_obstacle_left": 2.0691687723884966,
     "design_obstacle_right": 1.4684970776446316

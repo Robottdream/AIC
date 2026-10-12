@@ -94,6 +94,22 @@ def rectangle_distance(first, second):
     return min(distances)
 
 
+def set_cargo_box_inertia(model):
+    """Match cargo inertia to its existing box size and mass, about its center."""
+    link = model.find('link')
+    inertial = link.find('inertial')
+    mass = float(inertial.findtext('mass'))
+    x, y, z = map(float, link.findtext('collision/geometry/box/size').split())
+    inertia = inertial.find('inertia')
+    if inertia is None:
+        inertia = ET.SubElement(inertial, 'inertia')
+    inertia.clear()
+    values = dict(ixx=mass*(y*y+z*z)/12, ixy=0., ixz=0.,
+                  iyy=mass*(x*x+z*z)/12, iyz=0., izz=mass*(x*x+y*y)/12)
+    for name, value in values.items():
+        ET.SubElement(inertia, name).text = f'{value:.12g}'
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     stable = ET.parse(ROOT/'src/yzbot/mybot_description/worlds/room.world').getroot().find('world')
@@ -136,6 +152,7 @@ def main():
         for index, (x, y) in enumerate(positions, 1):
             model = copy.deepcopy(stable.find(f"model[@name='{color}_cube_{index}']"))
             model.find('pose').text = f'{x} {y} 0.75 0 0 0'
+            set_cargo_box_inertia(model)
             world.append(model)
     for key, (x, y) in ZONES.items():
         model = copy.deepcopy(stable.find(f"model[@name='zone_{key.lower()}']"))
@@ -215,7 +232,13 @@ def main():
     navigation = yaml.safe_load((ROOT/'src/yzbot/bot_navigation/param/originbot_nav2.yaml').read_text())
     follow = navigation['controller_server']['ros__parameters']['FollowPath']
     follow.update(max_lookahead_dist=1.5, cost_scaling_dist=0.9,
-                  max_allowed_time_to_collision_up_to_carrot=2.0)
+                  max_allowed_time_to_collision_up_to_carrot=2.0,
+                  rotate_to_heading_angular_vel=4.0, max_angular_accel=10.0)
+    smoother = navigation['velocity_smoother']['ros__parameters']
+    smoother['max_velocity'][2] = 4.0
+    smoother['min_velocity'][2] = -4.0
+    smoother['max_accel'][2] = 10.0
+    smoother['max_decel'][2] = -10.0
     for name, frequency in [('local_costmap', 20.0), ('global_costmap', 5.0)]:
         params = navigation[name][name]['ros__parameters']
         params['update_frequency'] = frequency
@@ -312,7 +335,7 @@ def main():
         static_clearance_gate_m=0.48, walls_preserved_from_local_usb_original=True,
         min_grasp_track_center_distance_m=grasp_track_distances,
         min_obstacle_surface_to_wall_m=track_wall_clearances,
-        cargo_physics='unchanged current stable definitions',
+        cargo_physics='existing mass/geometry/gravity/contact; explicit uniform-box inertia from mass and size',
         min_obstacle_surface_to_static_box_m=track_static_clearances,
         imported_static_obstacle_physics='static=1; original visual/collision geometry retained; poses aligned to original PGM')
     # Publish the files only after the whole layout has passed validation.

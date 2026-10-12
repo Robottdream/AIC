@@ -13,6 +13,7 @@ from rclpy.action import ActionClient
 parser = argparse.ArgumentParser(description="Gazebo delivery benchmark; excludes language parsing latency")
 parser.add_argument('--log-dir', required=True)
 parser.add_argument('--timeout', type=float, default=380.)
+parser.add_argument('--headless', '--headlees', action='store_true', help='Run Gazebo without its graphics client')
 parser.add_argument('--use-running', action='store_true', help='Use the one-click stack; stop it on detected instability')
 args = parser.parse_args()
 start_delay = float(os.environ.get('AIC_BENCHMARK_START_DELAY', '3'))
@@ -89,9 +90,9 @@ def start(name,args):
  processes.append((p,f)); print(name,p.pid,flush=True)
 try:
  if not args.use_running:
-  start('gazebo',['ros2','launch','mybot','gazebo_world.launch.py'] + ([f'world:={world_file}'] if world_file else []))
+  start('gazebo',['ros2','launch','mybot','gazebo_world.launch.py',f'gui:={str(not args.headless).lower()}'] + ([f'world:={world_file}'] if world_file else []))
   time.sleep(12)
-  for gazebo_process in ('gzserver', 'gzclient'):
+  for gazebo_process in (('gzserver',) if args.headless else ('gzserver', 'gzclient')):
    if subprocess.run(['pgrep', '-x', gazebo_process], stdout=subprocess.DEVNULL).returncode != 0:
     raise RuntimeError(f'{gazebo_process} failed to start; see gazebo.log')
   start('nav2',['ros2','launch','nav2_bringup','bringup_launch.py','use_sim_time:=true','map:='+map_file,'params_file:='+nav_params])
@@ -101,6 +102,15 @@ try:
                         ('arm','07_arm.log'),('nav2','03_nav2.log'),('gazebo','01_gazebo.log')):
    (log/(name+'.log')).symlink_to(running_logs/filename)
  rclpy.init();node=Node('algorithm_trial')
+ phase_events=[]
+ phase_start_ns=[None]
+ def on_task_stage(msg):
+  if phase_start_ns[0] is None:return
+  event=json.loads(msg.data)
+  if event['monotonic_ns'] < phase_start_ns[0]:return
+  event['wall_seconds']=(event['monotonic_ns']-phase_start_ns[0])/1e9
+  phase_events.append(event)
+ node.create_subscription(String,'/task_stage',on_task_stage,100)
  clock_ns=[None];clock_wall=[None]
  def on_clock(msg):
   clock_ns[0]=msg.clock.sec*1000000000+msg.clock.nanosec
@@ -150,7 +160,8 @@ try:
        obstacle_position=(shape['x'],shape['y']))
       break
     if collision[0] is not None:break
-  if tilt_samples[-1]>5.0 or abs(p.x)>20.0 or abs(p.y)>20.0 or p.z>0.3:
+  if instability[0] is None and (
+   tilt_samples[-1]>5.0 or abs(p.x)>20.0 or abs(p.y)>20.0 or p.z>0.3):
    instability[0]=dict(position=(p.x,p.y,p.z),tilt_deg=tilt_samples[-1])
  node.create_subscription(Odometry,'/odom',on_odom,QoSProfile(depth=20,reliability=ReliabilityPolicy.BEST_EFFORT,durability=DurabilityPolicy.VOLATILE))
  nav_command_speeds=[]
@@ -199,6 +210,7 @@ try:
  speed_samples.clear()
  tilt_samples.clear();angular_samples.clear();motion_samples.clear()
  began=time.monotonic();sim_began=clock_ns[0]
+ phase_start_ns[0]=int(began*1e9)
  pub.publish(String(data=json.dumps(benchmark_tasks)))
  print(f'START wall={began:.3f} sim={sim_began/1e9:.3f}',flush=True)
  last_counts=(-1,-1)
@@ -265,12 +277,19 @@ try:
   if any(p.poll() is not None for p,_ in processes):raise RuntimeError('child exited')
  aborted=instability[0] or collision[0]
  elapsed=aborted['wall_seconds'] if aborted else time.monotonic()-began
+ sim_elapsed=(clock_ns[0]-sim_began)/1e9
+ # The completion log can precede delivery of the final WAIT_TASK event.
+ phase_deadline=time.monotonic()+.2
+ while time.monotonic()<phase_deadline and (not phase_events or phase_events[-1]['step']!='WAIT_TASK'):
+  rclpy.spin_once(node,timeout_sec=.01)
  moving_samples=[v for v in speed_samples if v>0.05]
  fraction_above_062=sum(v>=0.62 for v in moving_samples)/len(moving_samples) if moving_samples else 0.0
  mean_moving_speed=sum(moving_samples)/len(moving_samples) if moving_samples else 0.0
- result=dict(timing_scope='parsed /chat publish to task completion or terminal failure; excludes language parsing',wall_seconds=elapsed,sim_seconds=(clock_ns[0]-sim_began)/1e9,peak_odom_linear_mps=max(speed_samples,default=0.0),moving_fraction_at_least_062=fraction_above_062,mean_moving_speed_mps=mean_moving_speed,peak_nav_command_mps=max(nav_command_speeds,default=0.0),peak_base_command_mps=max(base_command_speeds,default=0.0),seconds=elapsed,complete=not instability[0] and not collision[0] and '所有优化任务执行完成' in s,grasp_count=s.count('机械臂抓取成功'),place_count=s.count('机械臂放置成功'),arrivals=arrivals,placements=placements)
+ result=dict(timing_scope='parsed /chat publish to task completion or terminal failure; excludes language parsing',wall_seconds=elapsed,sim_seconds=sim_elapsed,peak_odom_linear_mps=max(speed_samples,default=0.0),moving_fraction_at_least_062=fraction_above_062,mean_moving_speed_mps=mean_moving_speed,peak_nav_command_mps=max(nav_command_speeds,default=0.0),peak_base_command_mps=max(base_command_speeds,default=0.0),seconds=elapsed,complete=not instability[0] and not collision[0] and '所有优化任务执行完成' in s,grasp_count=s.count('机械臂抓取成功'),place_count=s.count('机械臂放置成功'),arrivals=arrivals,placements=placements)
  result['aborted_for_collision']=collision[0]
  result['task_start_delay_seconds']=start_delay
+ result['headless']=args.headless
+ result['phase_events']=phase_events
  navigator_log = log/'navigator.log'
  prediction_log = navigator_log.read_text(errors='replace') if navigator_log.exists() else ''
  result['prediction_checks'] = dict(
@@ -328,6 +347,8 @@ try:
 finally:
  if 'motion_samples' in locals():
   (log/'motion.json').write_text(json.dumps(motion_samples,indent=2))
+ if 'phase_events' in locals():
+  (log/'phases.json').write_text(json.dumps(phase_events,indent=2))
  for p,f in reversed(processes):
   try:os.killpg(p.pid,signal.SIGTERM)
   except ProcessLookupError:pass

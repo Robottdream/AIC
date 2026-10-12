@@ -13,7 +13,7 @@ def generate_launch_description():
         ExecuteProcess(cmd=['python3', str(Path(__file__).with_name('rosbridge_with_assets.py')),
                             '--port', str(port), '--max_message_size', '16000000',
                             '--write_queue_size', '16', '--call_services_in_new_thread', 'true',
-                            '--default_call_service_timeout', '5.0',
+                            '--default_call_service_timeout', '15.0',
                             '--send_action_goals_in_new_thread', 'true'],
                        output='screen', respawn=True, respawn_delay=2.0),
         ExecuteProcess(cmd=['python3', str(Path(__file__).with_name('rosapi_safe.py'))],

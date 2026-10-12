@@ -146,8 +146,8 @@
             <wheel_diameter>${2*wheel_radius}</wheel_diameter>
 
             <!-- limits -->
-            <max_wheel_torque>5</max_wheel_torque>
-            <!-- Nav2 velocity_smoother owns acceleration and braking. -->
+            <max_wheel_torque>20</max_wheel_torque>
+            <!-- Nav2 velocity_smoother handles commanded acceleration and braking. -->
             <max_wheel_acceleration>0.0</max_wheel_acceleration>
 
             <!-- output -->

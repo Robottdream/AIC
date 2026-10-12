@@ -153,7 +153,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('command', nargs='?', default='start', choices=['start', 'restart', 'stop', 'status', 'logs'])
     parser.add_argument('module', nargs='?')
-    parser.add_argument('--headless', action='store_true')
+    parser.add_argument('--headless', '--headlees', action='store_true')
     args = parser.parse_args()
     def interrupted(*_):
         raise KeyboardInterrupt

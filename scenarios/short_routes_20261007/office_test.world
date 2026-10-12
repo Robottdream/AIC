@@ -2622,6 +2622,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2655,6 +2663,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2688,6 +2704,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2721,6 +2745,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2754,6 +2786,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2787,6 +2827,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2820,6 +2868,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2853,6 +2909,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2886,6 +2950,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">
@@ -2919,6 +2991,14 @@
       <link name="link">
         <inertial>
           <mass>0.1</mass>
+          <inertia>
+            <ixx>0.000015</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.000015</iyy>
+            <iyz>0</iyz>
+            <izz>0.000015</izz>
+          </inertia>
         </inertial>
         <gravity>0</gravity>
         <collision name="collision">

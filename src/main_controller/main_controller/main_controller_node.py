@@ -11,6 +11,7 @@ from rclpy.timer import Timer
 import json
 import math
 import weakref
+import time
 from itertools import permutations
 
 class MainControllerNode(Node):
@@ -111,6 +112,7 @@ class MainControllerNode(Node):
         self.target_cube_pub = self.create_publisher(String, "/current_target_cube", 10)
         self.nav_target_pub = self.create_publisher(String, "/manual_nav_target", 10)
         self.arm_cargo_pub = self.create_publisher(String, "/nav_done_cargo", 10)
+        self.task_stage_pub = self.create_publisher(String, '/task_stage', 10)
         self.arm_area_pub = self.create_publisher(String, "/nav_done_area", 10)
         self.foxglove_pubs = {
             "color": self.create_publisher(Int32, "/color", 10),
@@ -132,6 +134,20 @@ class MainControllerNode(Node):
         # 初始状态：空闲
         self.target_area_pub.publish(Int32(data=9))
         self.number_pick_pub.publish(Int32(data=0))
+
+    @property
+    def current_step(self):
+        return getattr(self, '_current_step', 'WAIT_TASK')
+
+    @current_step.setter
+    def current_step(self, step):
+        previous = getattr(self, '_current_step', None)
+        self._current_step = step
+        publisher = getattr(self, 'task_stage_pub', None)
+        if publisher is not None and previous != step:
+            publisher.publish(String(data=json.dumps(dict(
+                step=step, previous=previous, monotonic_ns=time.monotonic_ns(),
+                sim_ns=self.get_clock().now().nanoseconds))))
 
     def _publish_competition_ready(self):
         state = dict(
