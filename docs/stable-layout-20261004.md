@@ -23,6 +23,12 @@ stable 原有红三件 A、蓝两件 B 的计时实验（会自动发任务，�
 常规 start 不发任务，等待 `/command` 自然语言输入；Foxglove 导入根目录
 `demo1.json`，连接 `ws://localhost:9090`。
 
+2026-10-08：普通 `start` / `restart` 默认加载
+`scenarios/short_routes_20261007/` 的办公室世界、导航地图、导航参数和物块/区域坐标，
+启动时打印四个实际文件路径。新地图的任务限制见 `office-map-snapshot-20261008.md`。
+用 `AIC_SCENE=usb_office_20261007` 可选择另一场景；显式设置的
+`AIC_WORLD`、`AIC_MAP`、`AIC_TASK_CONFIG`、`AIC_NAV_PARAMS` 保持优先。
+
 模型与二进制优先使用本项目 runtime，再查找 `/home/polarbear/ws_aic/runtime`
 和 `/home/polarbear/AIC/runtime`。可用 `LLAMA_BIN` 与 `MODEL` 指定。
 仅 tf2_ros 0.25.23 向 Nav2 进程预加载本分支自带 aic_tf2_fix。

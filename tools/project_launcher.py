@@ -103,7 +103,7 @@ def runtime_file(variable, relative):
 
 
 def start(headless):
-    if any(alive(pid) for pid in load().values()):
+    if any(group_alive(pid) for pid in load().values()):
         raise RuntimeError('Project already running; use status or restart')
     if subprocess.run(['pgrep', '-x', 'gzserver'], stdout=subprocess.DEVNULL).returncode == 0:
         raise RuntimeError('Another Gazebo simulation is running; stop it first')
@@ -165,7 +165,7 @@ def main():
         if not load():
             print('Project stopped')
         for name, pid in load().items():
-            print(name, pid, 'running' if alive(pid) else 'stopped')
+            print(name, pid, 'running' if group_alive(pid) else 'stopped')
     elif args.command == 'logs':
         files = [RUN / f'{args.module}.log'] if args.module else sorted(RUN.glob('*.log'))
         for path in files:
