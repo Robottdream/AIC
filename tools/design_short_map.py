@@ -245,6 +245,18 @@ def main():
         params['footprint_padding'] = 0.08
         params['inflation_layer']['inflation_radius'] = 1.0
 
+    navigation['planner_server']['ros__parameters']['GridBased'] = dict(
+        plugin='aic_timed_planner/TimeAwarePlanner', nominal_speed=2.2, max_planning_time=1.5,
+        obstacle_names=[o['name'] for o in OBSTACLES],
+        obstacle_tracks=[v for o in OBSTACLES for p in (o['start'],o['end']) for v in p],
+        obstacle_sizes=[o['size'] for o in OBSTACLES], obstacle_speeds=[o['speed'] for o in OBSTACLES])
+
+    follow['plugin'] = 'aic_timed_planner/TimeAwareController'
+    # The predictive controller checks static footprints and future actors itself.
+    follow['use_collision_detection'] = False
+    for key in ('obstacle_names', 'obstacle_tracks', 'obstacle_sizes', 'obstacle_speeds'):
+        follow[key] = list(navigation['planner_server']['ros__parameters']['GridBased'][key])
+
     free = np.array(im) == 254
     clearance = distance_transform_edt(free)*RESOLUTION
     components, _ = label(clearance >= 0.48)

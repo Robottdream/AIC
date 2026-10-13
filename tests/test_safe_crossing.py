@@ -94,7 +94,7 @@ class SafeCrossingTests(unittest.TestCase):
         n._update_controller_profile(lambda:ready.append('cross'))
         self.assertEqual(ready,['entry'])
         self.assertEqual({p.name:p.value for p in requests[0].parameters}[
-            'FollowPath.max_lookahead_dist'],.65)
+            'FollowPath.max_lookahead_dist'],.45)
         self.assertEqual({p.name:p.value for p in requests[0].parameters}[
             'FollowPath.desired_linear_vel'],.8)
         callbacks[0](f)

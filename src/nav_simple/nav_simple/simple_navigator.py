@@ -116,7 +116,6 @@ class SimpleNav2Navigator(Node):
                        durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_subscription(ModelStates, '/model_states', self._world_callback,
                                  qos_profile_sensor_data)
-        self.create_timer(.05, self._check_crossing_entry)
         self.prediction_last_log = -math.inf
         for i, name in enumerate(names):
             points = tuple(tracks[4*i:4*i+4])
@@ -174,8 +173,8 @@ class SimpleNav2Navigator(Node):
             return
         constrained = near or crossing
         values = {'FollowPath.desired_linear_vel': .8 if crossing else (1.2 if near else self.crossing_cruise_speed),
-                  'FollowPath.max_lookahead_dist': .65 if constrained else 1.5,
-                  'FollowPath.lookahead_time': .6 if constrained else 1.0}
+                  'FollowPath.max_lookahead_dist': .45 if constrained else 1.5,
+                  'FollowPath.lookahead_time': .4 if constrained else 1.0}
         request = SetParametersAtomically.Request()
         request.parameters = [Parameter(name, value=value).to_parameter_msg()
                               for name, value in values.items()]
@@ -541,34 +540,9 @@ class SimpleNav2Navigator(Node):
                 self.get_logger().warn("目标点没有有效路径")
                 self.status_pub.publish(String(data="failed: no_path"))
                 return
-            if self._install_crossing_route(result.result.path, nav_goal):
-                return
-            wait_seconds = self._crossing_wait(nav_goal, result.result.path)
-            if wait_seconds > 0.0:
-                scene_prediction = bool(getattr(self, 'scene_tracks', None))
-                waiting_started = self.get_clock().now().nanoseconds * 1e-9
-                deadline = waiting_started + (self.crossing_max_wait if scene_prediction else wait_seconds)
-                def release():
-                    if request_id != self.request_id or self.emergency_stop_active:
-                        self._cancel_pending_start()
-                        return
-                    remaining = self._crossing_wait(nav_goal, result.result.path)
-                    if remaining == 0.0:
-                        if scene_prediction:
-                            waited = self.get_clock().now().nanoseconds*1e-9-waiting_started
-                            self.get_logger().info(f"轨迹预测放行，实际等待={waited:.2f}s")
-                        self._cancel_pending_start()
-                        self._start_navigation(nav_goal, request_id)
-                    elif self.get_clock().now().nanoseconds * 1e-9 >= deadline:
-                        self._cancel_pending_start()
-                        if scene_prediction:
-                            self.get_logger().warn("轨迹预测等待超时，拒绝直接穿过预测冲突")
-                            self.status_pub.publish(String(data="failed: predicted_crossing_blocked"))
-                        else:
-                            self._start_navigation(nav_goal, request_id)
-                self.pending_start_timer = self.create_timer(0.25, release)
-            else:
-                self._start_navigation(nav_goal, request_id)
+            # The timed planner uses live actor forecasts while driving. Send
+            # the original task goal directly; no waiting/crossing waypoints.
+            self._start_navigation(nav_goal, request_id)
         except Exception as e:
             self.get_logger().error(f"读取规划结果失败：{e}")
             self.status_pub.publish(String(data="failed: planning_error"))
@@ -647,6 +621,21 @@ class SimpleNav2Navigator(Node):
                         self._send_route_stage()
                         return
                     self.route_stage = None
+                # Humble can report a reached goal after a failed TF lookup.
+                # In this simulator the task/map coordinates share world XY;
+                # confirm fresh measured arrival before permitting a grasp.
+                measured = self.world_pose
+                now = self.get_clock().now().nanoseconds*1e-9
+                if measured is None or now-measured[0] > .5 or self.goal_pose is None:
+                    self.get_logger().error('到达核验失败：没有新鲜的仿真底盘位置')
+                    self.status_pub.publish(String(data='failed: arrival_pose_unavailable'))
+                    return
+                target = self.goal_pose.pose.position
+                arrival_error = math.hypot(measured[1]-target.x, measured[2]-target.y)
+                if arrival_error > .35:
+                    self.get_logger().error(f'拒绝到达误报：底盘距任务目标仍有{arrival_error:.2f}m')
+                    self.status_pub.publish(String(data='failed: arrival_position_mismatch'))
+                    return
                 if self.near_goal_started is not None:
                     elapsed = time.monotonic() - self.near_goal_started
                     self.get_logger().info(f"目标末段耗时：{elapsed:.2f}s")

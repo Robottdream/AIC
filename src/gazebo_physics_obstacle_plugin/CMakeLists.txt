@@ -16,6 +16,7 @@ find_package(gazebo_dev REQUIRED)
 find_package(gazebo_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 # Build simple move plugin
 add_library(simple_move_plugin SHARED 
@@ -32,6 +33,7 @@ ament_target_dependencies(simple_move_plugin
   gazebo_msgs
   rclcpp
   geometry_msgs
+  std_msgs
 )
 
 target_link_libraries(simple_move_plugin

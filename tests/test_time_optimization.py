@@ -155,32 +155,25 @@ class TimingTests(unittest.TestCase):
                 self.assertEqual(requests, [])
                 self.assertEqual(messages, ['place_lost'])
 
-    def test_release_rechecks_and_cancels_on_new_goal(self):
+    def test_direct_plan_starts_original_goal_without_wait_or_intermediate_goal(self):
         C = methods('nav_simple/nav_simple/simple_navigator.py', 'SimpleNav2Navigator',
                     {'plan_result_callback'})
-        # Method uses GoalStatus as a global, supplied without a ROS dependency.
         C.plan_result_callback.__globals__['GoalStatus'] = NS(STATUS_SUCCEEDED=4)
-        node = C()
-        node.request_id = 1
-        node.crossing_max_wait = 12.0
-        node.emergency_stop_active = False
-        node.get_clock = lambda: NS(now=lambda: NS(nanoseconds=0))
+        node = C(); node.request_id = 1; node.emergency_stop_active = False
         node.get_logger = lambda: NS(error=lambda *_: None)
-        waits = iter([4., 0.])
-        node._crossing_wait = lambda *_: next(waits)
-        node._install_crossing_route = lambda *_: False
-        callbacks, started, canceled = [], [], []
-        node.create_timer = lambda period, callback: callbacks.append(callback)
-        node._cancel_pending_start = lambda: canceled.append(True)
+        def forbidden(*args):
+            raise AssertionError('Continuous routing must not install waypoints or wait')
+        node._crossing_wait = node._install_crossing_route = node.create_timer = forbidden
+        started = []
         node._start_navigation = lambda *args: started.append(args)
         response = NS(status=4, result=NS(path=path((0, 0), (1, 0))))
-        node.plan_result_callback(NS(result=lambda: response), 'goal', 1)
-        callbacks[0]()
-        self.assertEqual(started, [('goal', 1)])
+        node.plan_result_callback(NS(result=lambda: response), 'original_goal', 1)
+        self.assertEqual(started, [('original_goal', 1)])
         node.request_id = 2
-        callbacks[0]()
-        self.assertEqual(len(started), 1)
-        self.assertEqual(len(canceled), 2)
+        node.plan_result_callback(NS(result=lambda: response), 'stale_goal', 1)
+        node.emergency_stop_active = True
+        node.plan_result_callback(NS(result=lambda: response), 'paused_goal', 2)
+        self.assertEqual(started, [('original_goal', 1)])
 
 
 if __name__ == '__main__':

@@ -133,6 +133,15 @@ def start(headless):
         nav = Path(get_package_share_directory('bot_navigation'))
         map_file = os.environ.get('AIC_MAP', str(nav / 'maps/map.yaml'))
         nav_params = os.environ.get('AIC_NAV_PARAMS', str(nav / 'param/originbot_nav2.yaml'))
+        import yaml
+        navigation = yaml.safe_load(Path(nav_params).read_text())
+        planner = navigation.get('planner_server', {}).get('ros__parameters', {}).get('GridBased', {})
+        if planner.get('plugin') == 'aic_timed_planner/TimeAwarePlanner':
+            bt = navigation['bt_navigator']['ros__parameters']
+            bt.setdefault('default_nav_to_pose_bt_xml', str(ROOT / 'tools' / 'continuous_navigation.xml'))
+            resolved = RUN / 'nav2-resolved.yaml'
+            resolved.write_text(yaml.safe_dump(navigation, sort_keys=False))
+            nav_params = str(resolved)
         spawn('03_nav2', ['ros2', 'launch', 'nav2_bringup', 'bringup_launch.py', 'use_sim_time:=true', f'map:={map_file}', f'params_file:={nav_params}'])
         wait(lambda: ros_check(['lifecycle', 'get', '/bt_navigator'], 'active'), 'Nav2', state)
         spawn('04_llama', [binary, '-m', model, '-c', '2048', '--threads', '8', '--port', '8081'])

@@ -126,7 +126,7 @@ controller_server:
       xy_goal_tolerance: 0.15
       yaw_goal_tolerance: 0.1
     FollowPath:
-      plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
+      plugin: aic_timed_planner/TimeAwareController
       desired_linear_vel: 2.2
       lookahead_dist: 0.55
       min_lookahead_dist: 0.35
@@ -138,7 +138,7 @@ controller_server:
       transform_tolerance: 0.2
       min_approach_linear_velocity: 0.08
       approach_velocity_scaling_dist: 1.2
-      use_collision_detection: true
+      use_collision_detection: false
       max_allowed_time_to_collision_up_to_carrot: 2.0
       use_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 1.1
@@ -150,6 +150,24 @@ controller_server:
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.65
       allow_reversing: false
+      obstacle_names:
+      - design_obstacle_left
+      - design_obstacle_right
+      obstacle_tracks:
+      - -3.65
+      - 1.0
+      - -0.8
+      - -1.8
+      - -4.0
+      - -6.9
+      - -0.3
+      - -4.3
+      obstacle_sizes:
+      - 0.5
+      - 0.5
+      obstacle_speeds:
+      - 0.35
+      - 0.35
 controller_server_rclcpp_node:
   ros__parameters:
     use_sim_time: true
@@ -262,10 +280,27 @@ planner_server:
     planner_plugins:
     - GridBased
     GridBased:
-      plugin: nav2_navfn_planner/NavfnPlanner
-      tolerance: 0.3
-      use_astar: false
-      allow_unknown: true
+      plugin: aic_timed_planner/TimeAwarePlanner
+      nominal_speed: 2.2
+      max_planning_time: 1.5
+      obstacle_names:
+      - design_obstacle_left
+      - design_obstacle_right
+      obstacle_tracks:
+      - -3.65
+      - 1.0
+      - -0.8
+      - -1.8
+      - -4.0
+      - -6.9
+      - -0.3
+      - -4.3
+      obstacle_sizes:
+      - 0.5
+      - 0.5
+      obstacle_speeds:
+      - 0.35
+      - 0.35
 planner_server_rclcpp_node:
   ros__parameters:
     use_sim_time: true

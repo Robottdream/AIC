@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
 
 namespace gazebo
 {
@@ -33,6 +34,8 @@ namespace gazebo
         std::shared_ptr<rclcpp::Node> ros_node;
         rclcpp::Publisher<geometry_msgs::msg::Pose>::SharedPtr pose_publisher;
         std::string pose_topic;
+        rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr motion_publisher;
+        double last_pose_publish_time = -1e9;
         
     public:
         void Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf)
@@ -103,6 +106,8 @@ namespace gazebo
             this->pose_publisher = this->ros_node->create_publisher<geometry_msgs::msg::Pose>(
                 this->pose_topic, 10);
             
+            this->motion_publisher = this->ros_node->create_publisher<std_msgs::msg::Float64MultiArray>(
+                "/" + model_name + "/motion_state", rclcpp::SensorDataQoS());
             RCLCPP_INFO(this->ros_node->get_logger(), "Publishing pose to: %s", this->pose_topic.c_str());
         }
         
@@ -119,7 +124,7 @@ namespace gazebo
                 double current_y = pose.Pos().Y();
                 
                 // 发布位置信息
-                this->PublishPose(pose);
+
                 
                 // 确定目标点
                 double target_x = this->moving_to_end ? this->end_x : this->start_x;
@@ -183,6 +188,7 @@ namespace gazebo
                 // motion. Zeroing Vz every frame can keep a tipped cube raised.
                 this->link->SetLinearVel(ignition::math::Vector3d(
                     desired_vx, desired_vy, linear_vel.Z()));
+                this->PublishMotionState(_info.simTime.Double(), pose);
 
                 double current_time = _info.simTime.Double();
                 // 定期输出状态
@@ -217,6 +223,18 @@ namespace gazebo
             this->link->SetAngularVel(angular_velocity);
         }
         
+        void PublishMotionState(double sim_time, const ignition::math::Pose3d& pose)
+        {
+            if (sim_time < this->last_pose_publish_time) this->last_pose_publish_time = -1e9;
+            if (sim_time - this->last_pose_publish_time < 0.05) return;
+            this->last_pose_publish_time = sim_time;
+            this->PublishPose(pose);
+            std_msgs::msg::Float64MultiArray message;
+            // Simulator time, actual world XY, and actual next-leg direction.
+            message.data = {sim_time, pose.Pos().X(), pose.Pos().Y(), this->moving_to_end ? 1.0 : -1.0};
+            this->motion_publisher->publish(message);
+        }
+
         void PublishPose(const ignition::math::Pose3d& pose)
         {
             // 发布当前位置信息

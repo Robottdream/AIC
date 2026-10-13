@@ -1,0 +1,31 @@
+<!-- Replan from the actual pose at 5 Hz while FollowPath keeps running.
+     No scheduled wait, spin or backup actions are added to the delivery route. -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="3" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithLivePrediction">
+        <RateController hz="5.0">
+          <!-- A failed new search must not erase the currently executing path.
+               The controller still validates every command against live actors. -->
+          <ForceSuccess>
+            <Sequence name="CommitSuccessfulPlan">
+              <ComputePathToPose goal="{goal}" path="{candidate_path}" planner_id="GridBased"/>
+              <SetBlackboard value="{candidate_path}" output_key="path"/>
+            </Sequence>
+          </ForceSuccess>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocal" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <Sequence name="RefreshCostmaps">
+          <ClearEntireCostmap name="RefreshLocal" service_name="local_costmap/clear_entirely_local_costmap"/>
+          <ClearEntireCostmap name="RefreshGlobal" service_name="global_costmap/clear_entirely_global_costmap"/>
+        </Sequence>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

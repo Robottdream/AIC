@@ -1,0 +1,8 @@
+<library path="aic_timed_planner">
+  <class name="aic_timed_planner/TimeAwarePlanner" type="aic_timed_planner::TimeAwarePlanner" base_class_type="nav2_core::GlobalPlanner">
+    <description>SE2 and arrival-time search with no waiting actions or fixed crossing goals.</description>
+  </class>
+  <class name="aic_timed_planner/TimeAwareController" type="aic_timed_planner::TimeAwareController" base_class_type="nav2_core::Controller">
+    <description>Receding-horizon tracking with live actor forecasts and bounded acceleration.</description>
+  </class>
+</library>
