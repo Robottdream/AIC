@@ -151,13 +151,13 @@ public:
     };
     const double nominal_v=command.twist.linear.x,nominal_w=command.twist.angular.z;
     const bool rotation=std::abs(nominal_v)<.001;
-    auto rollout=[&](double cv,double cw,double scale) {
+    auto rollout=[&](double cv,double cw,double scale,bool turn_only=false) {
       double x=px,y=py,a=pa,v=rv,w=rw;
       size_t nearest=0;
       for(double t=.05;t<=2.0001;t+=.05) {
         double target_v=cv,target_w=cw;
         if(t>.30) {
-          if(rotation) {
+          if(rotation || turn_only) {
             size_t carrot=0;
             while(carrot+1<plan.poses.size() && std::hypot(plan.poses[carrot].pose.position.x-x,
               plan.poses[carrot].pose.position.y-y)<lookahead) ++carrot;
@@ -200,6 +200,21 @@ public:
         double v=nominal_v*scale,w=std::clamp(nominal_w*scale+offset,-4.,4.);
         double score=(1.-scale)*2.+std::abs(offset)*.8;
         if(score<best && rollout(v,w,scale)) {best=score;chosen_v=v;chosen_w=w;found=true;}
+      }
+    }
+    if(!found && !rotation) {
+      // A forward path can require turning before advancing at a tight corner.
+      // Test a bounded in-place alignment under the same live collision guard,
+      // rather than repeatedly rejecting every positive-speed candidate.
+      size_t carrot=0;
+      while(carrot+1<plan.poses.size() && std::hypot(plan.poses[carrot].pose.position.x-px,
+            plan.poses[carrot].pose.position.y-py)<lookahead) ++carrot;
+      const double error=wrap(std::atan2(plan.poses[carrot].pose.position.y-py,
+        plan.poses[carrot].pose.position.x-px)-pa);
+      const double requested=std::copysign(std::min(4.,std::sqrt(20.*std::abs(error))),error);
+      const double angular=std::clamp(requested,rw-.5,rw+.5);
+      if(std::abs(error)>.05 && rollout(0.,angular,0.,true)) {
+        chosen_v=0.;chosen_w=angular;found=true;
       }
     }
     if(!found) {

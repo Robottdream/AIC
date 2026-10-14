@@ -273,7 +273,7 @@ try:
    print(f'PROGRESS grabs={counts[0]} places={counts[1]} wall={time.monotonic()-began:.1f}s sim={(clock_ns[0]-sim_began)/1e9:.1f}s',flush=True)
    last_counts=counts
   if '所有优化任务执行完成' in s:break
-  if any(reason in s for reason in ('停止以避免误报完成', '目标区域导航失败：', '放置连续失败，停止后续任务', '物块放置位置修正三次仍失败')):break
+  if any(reason in s for reason in ('停止以避免误报完成', '目标区域导航失败：', '放置连续失败，停止后续任务', '物块放置位置修正三次仍失败', '当前没有可达且可返回目标区域的同色物块', '路径预检服务不可用')):break
   if any(p.poll() is not None for p,_ in processes):raise RuntimeError('child exited')
  aborted=instability[0] or collision[0]
  elapsed=aborted['wall_seconds'] if aborted else time.monotonic()-began

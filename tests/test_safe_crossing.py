@@ -80,6 +80,7 @@ class SafeCrossingTests(unittest.TestCase):
         env['SetParametersAtomically']=NS(Request=lambda:NS(parameters=[]))
         n=C();n.get_clock=lambda:NS(now=lambda:NS(nanoseconds=1_000_000_000))
         n.world_pose=(1.,0.,0.);n.static_map=NS();n.goal_pose=NS()
+        n.slow_near_static_obstacles=True
         n.controller_profile='near';n.controller_profile_pending=False
         n.controller_profile_retry_at=0.;n.crossing_cruise_speed=2.2
         n.route_stage={'kind':'entry'};ready=[];requests=[];callbacks=[]
@@ -100,6 +101,33 @@ class SafeCrossingTests(unittest.TestCase):
         callbacks[0](f)
         self.assertEqual(n.controller_profile,'cross')
         self.assertEqual(ready,['entry','cross'])
+
+    def test_disabling_wall_speed_cap_preserves_short_lookahead_and_cruise(self):
+        C=methods('nav_simple/nav_simple/simple_navigator.py','SimpleNav2Navigator',{'_update_controller_profile'})
+        env=C._update_controller_profile.__globals__
+        env['static_clearance']=lambda *_:.5
+        env['Parameter']=lambda name,value:NS(to_parameter_msg=lambda:NS(name=name,value=value))
+        env['SetParametersAtomically']=NS(Request=lambda:NS(parameters=[]))
+        n=C();n.get_clock=lambda:NS(now=lambda:NS(nanoseconds=1_000_000_000))
+        n.world_pose=(1.,0.,0.);n.static_map=NS();n.goal_pose=NS()
+        n.controller_profile='open';n.controller_profile_pending=False
+        n.controller_profile_retry_at=0.;n.crossing_cruise_speed=2.2
+        n.slow_near_static_obstacles=False;n.route_stage=None
+        requests=[];callbacks=[];ready=[]
+        f=NS(add_done_callback=lambda cb:callbacks.append(cb),
+             result=lambda:NS(result=NS(successful=True)))
+        n.controller_parameters=NS(service_is_ready=lambda:True,
+            call_async=lambda request:requests.append(request) or f)
+        n.get_logger=lambda:NS(info=lambda _:None,warn=lambda _:None)
+        n._update_controller_profile(lambda:ready.append(True))
+        values={p.name:p.value for p in requests[0].parameters}
+        self.assertEqual(values['FollowPath.desired_linear_vel'],2.2)
+        self.assertEqual(values['FollowPath.max_lookahead_dist'],.45)
+        self.assertEqual(values['FollowPath.lookahead_time'],.4)
+        self.assertEqual(ready,[])
+        callbacks[0](f)
+        self.assertEqual(n.controller_profile,'near')
+        self.assertEqual(ready,[True])
 
     def test_intermediate_arrival_does_not_report_delivery_target_reached(self):
         C=methods('nav_simple/nav_simple/simple_navigator.py','SimpleNav2Navigator',{'result_callback'})

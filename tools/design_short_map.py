@@ -222,7 +222,7 @@ def main():
     config = {
         'main_controller_node': {'ros__parameters': dict(red_block_positions=flatten(RED),
             blue_block_positions=flatten(BLUE), area_parking_positions=flatten(parking), stable_layout_hints=False)},
-        'simple_nav2_navigator': {'ros__parameters': dict(area_parking_positions=flatten(parking), crossing_max_wait=12.0,
+        'simple_nav2_navigator': {'ros__parameters': dict(area_parking_positions=flatten(parking), crossing_max_wait=12.0, slow_near_static_obstacles=False,
             obstacle_names=[o['name'] for o in OBSTACLES],
             obstacle_tracks=flatten([p for o in OBSTACLES for p in (o['start'], o['end'])]),
             obstacle_sizes=[o['size'] for o in OBSTACLES], obstacle_speeds=[o['speed'] for o in OBSTACLES])},
@@ -246,7 +246,7 @@ def main():
         params['inflation_layer']['inflation_radius'] = 1.0
 
     navigation['planner_server']['ros__parameters']['GridBased'] = dict(
-        plugin='aic_timed_planner/TimeAwarePlanner', nominal_speed=2.2, max_planning_time=1.5,
+        plugin='aic_timed_planner/TimeAwarePlanner', nominal_speed=2.2, max_planning_time=1.5, slow_near_static_obstacles=False,
         obstacle_names=[o['name'] for o in OBSTACLES],
         obstacle_tracks=[v for o in OBSTACLES for p in (o['start'],o['end']) for v in p],
         obstacle_sizes=[o['size'] for o in OBSTACLES], obstacle_speeds=[o['speed'] for o in OBSTACLES])
@@ -254,6 +254,7 @@ def main():
     follow['plugin'] = 'aic_timed_planner/TimeAwareController'
     # The predictive controller checks static footprints and future actors itself.
     follow['use_collision_detection'] = False
+    follow['use_cost_regulated_linear_velocity_scaling'] = False
     for key in ('obstacle_names', 'obstacle_tracks', 'obstacle_sizes', 'obstacle_speeds'):
         follow[key] = list(navigation['planner_server']['ros__parameters']['GridBased'][key])
 

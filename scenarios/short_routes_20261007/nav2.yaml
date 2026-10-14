@@ -143,7 +143,7 @@ controller_server:
       use_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 1.1
       regulated_linear_scaling_min_speed: 0.18
-      use_cost_regulated_linear_velocity_scaling: true
+      use_cost_regulated_linear_velocity_scaling: false
       cost_scaling_dist: 0.9
       cost_scaling_gain: 0.8
       inflation_cost_scaling_factor: 3.0
@@ -301,6 +301,7 @@ planner_server:
       obstacle_speeds:
       - 0.35
       - 0.35
+      slow_near_static_obstacles: false
 planner_server_rclcpp_node:
   ros__parameters:
     use_sim_time: true

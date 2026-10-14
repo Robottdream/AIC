@@ -88,6 +88,8 @@ class SimpleNav2Navigator(Node):
             self.declare_parameter("crossing_cruise_speed", 2.2).value))
         self.crossing_acceleration = max(0.1, float(
             self.declare_parameter("crossing_acceleration", 3.5).value))
+        self.slow_near_static_obstacles = self.declare_parameter(
+            "slow_near_static_obstacles", True).value
         names = self.declare_parameter("obstacle_names", Parameter.Type.STRING_ARRAY).value or []
         tracks = self.declare_parameter("obstacle_tracks", Parameter.Type.DOUBLE_ARRAY).value or []
         sizes = self.declare_parameter("obstacle_sizes", Parameter.Type.DOUBLE_ARRAY).value or []
@@ -172,7 +174,9 @@ class SimpleNav2Navigator(Node):
                 ready()
             return
         constrained = near or crossing
-        values = {'FollowPath.desired_linear_vel': .8 if crossing else (1.2 if near else self.crossing_cruise_speed),
+        # Near-wall lookahead remains independent of the optional speed cap.
+        wall_speed_cap = near and self.slow_near_static_obstacles
+        values = {'FollowPath.desired_linear_vel': .8 if crossing else (1.2 if wall_speed_cap else self.crossing_cruise_speed),
                   'FollowPath.max_lookahead_dist': .45 if constrained else 1.5,
                   'FollowPath.lookahead_time': .4 if constrained else 1.0}
         request = SetParametersAtomically.Request()

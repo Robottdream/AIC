@@ -47,11 +47,13 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
   const Grid * heuristic_grid_=nullptr;
   double speed_=2.2,accel_=3.5,decel_=5.,limit_=1.5,horizon_=90.;
   double robot_speed_=0.,odom_stamp_=0.;
+  bool slow_near_static_obstacles_=true;
   const double step_=.20;
   const int headings_=32;
 
   static void field(const std::shared_ptr<Grid> & g, std::vector<float> & values,
-                    const std::vector<unsigned> & seeds, bool allow_near_wall)
+                    const std::vector<unsigned> & seeds, bool allow_near_wall,
+                    bool slow_near_static_obstacles=true, double nominal_speed=2.2)
   {
     using Item=std::pair<float,unsigned>;
     std::priority_queue<Item,std::vector<Item>,std::greater<Item>> queue;
@@ -68,7 +70,8 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
         const unsigned next=ny*g->w+nx;
         if(!allow_near_wall && g->clearance[next]<.30) continue;
         const double cruise=allow_near_wall ? 1. :
-          ((g->clearance[next]<1.10 || g->clearance[index]<1.10) ? 1.2 : 2.2);
+          ((slow_near_static_obstacles && (g->clearance[next]<1.10 || g->clearance[index]<1.10)) ?
+           std::min(1.2,nominal_speed) : nominal_speed);
         const float candidate=distance+g->r*(offset[0]&&offset[1] ? 1.41421356237 : 1.)/cruise;
         if(candidate+1e-6<values[next]) {values[next]=candidate;queue.push({candidate,next});}
       }
@@ -120,7 +123,7 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
     if(heuristic_grid_!=g.get()) {heuristic_cache_.clear();heuristic_grid_=g.get();}
     auto found=heuristic_cache_.find(goal);
     if(found!=heuristic_cache_.end()) return found->second;
-    std::vector<float> result;field(g,result,{goal},false);
+    std::vector<float> result;field(g,result,{goal},false,slow_near_static_obstacles_,speed_);
     if(heuristic_cache_.size()>24) heuristic_cache_.clear();
     heuristic_cache_[goal]=result;return result;
   }
@@ -139,8 +142,10 @@ public:
     declare("obstacle_sizes",rclcpp::ParameterValue(std::vector<double>{}));
     declare("obstacle_speeds",rclcpp::ParameterValue(std::vector<double>{}));
     declare("nominal_speed",rclcpp::ParameterValue(2.2));
+    declare("slow_near_static_obstacles",rclcpp::ParameterValue(true));
     declare("max_planning_time",rclcpp::ParameterValue(1.5));
     node_->get_parameter(name_+".nominal_speed",speed_);
+    node_->get_parameter(name_+".slow_near_static_obstacles",slow_near_static_obstacles_);
     node_->get_parameter(name_+".max_planning_time",limit_);
     std::vector<std::string> names;std::vector<double> tracks,sizes,speeds;
     node_->get_parameter(name_+".obstacle_names",names);
@@ -284,7 +289,7 @@ public:
         const double y=turn ? parent.y-radius*(std::cos(yaw)-std::cos(parent.yaw)) : parent.y+step_*std::sin(yaw);
         unsigned mx,my;if(!grid->map->worldToMap(x,y,mx,my)) continue;
         const double clearance=grid->clearance[my*grid->w+mx];
-        double velocity=clearance<1.10 ? std::min(1.2,speed_) : speed_;
+        double velocity=slow_near_static_obstacles_ && clearance<1.10 ? std::min(1.2,speed_) : speed_;
         if(turn) velocity=std::max(.18,velocity*std::min(1.,std::abs(radius)/1.1));
         if(velocity>parent.v) velocity=std::min(velocity,std::sqrt(parent.v*parent.v+2*accel_*step_));
         else velocity=std::max(velocity,std::sqrt(std::max(0.,parent.v*parent.v-2*decel_*step_)));
