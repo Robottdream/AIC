@@ -16,6 +16,7 @@
 #include "std_msgs/msg/string.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "gazebo_msgs/msg/model_states.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2/utils.h"
 
@@ -42,18 +43,22 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
   std::vector<rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr> motion_subs_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<gazebo_msgs::msg::ModelStates>::SharedPtr robot_sub_;
+  Pose2 robot_world_{0,0,0};double robot_stamp_=-1;
   rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr debug_pub_;
   std::unordered_map<unsigned,std::vector<float>> heuristic_cache_;
   const Grid * heuristic_grid_=nullptr;
   double speed_=2.2,accel_=3.5,decel_=5.,limit_=1.5,horizon_=90.;
   double robot_speed_=0.,odom_stamp_=0.;
   bool slow_near_static_obstacles_=true;
+  double preferred_static_clearance_=.85,wall_clearance_weight_=3.,dynamic_clearance_weight_=4.;
   const double step_=.20;
   const int headings_=32;
 
   static void field(const std::shared_ptr<Grid> & g, std::vector<float> & values,
                     const std::vector<unsigned> & seeds, bool allow_near_wall,
-                    bool slow_near_static_obstacles=true, double nominal_speed=2.2)
+                    bool slow_near_static_obstacles=true, double nominal_speed=2.2,
+                    double preferred_clearance=.85, double clearance_weight=3.)
   {
     using Item=std::pair<float,unsigned>;
     std::priority_queue<Item,std::vector<Item>,std::greater<Item>> queue;
@@ -72,7 +77,9 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
         const double cruise=allow_near_wall ? 1. :
           ((slow_near_static_obstacles && (g->clearance[next]<1.10 || g->clearance[index]<1.10)) ?
            std::min(1.2,nominal_speed) : nominal_speed);
-        const float candidate=distance+g->r*(offset[0]&&offset[1] ? 1.41421356237 : 1.)/cruise;
+        const double preference=allow_near_wall ? 0. : clearance_cost(
+          std::min(g->clearance[next],g->clearance[index]),preferred_clearance,clearance_weight);
+        const float candidate=distance+g->r*(offset[0]&&offset[1] ? 1.41421356237 : 1.)*(1.+preference)/cruise;
         if(candidate+1e-6<values[next]) {values[next]=candidate;queue.push({candidate,next});}
       }
     }
@@ -123,7 +130,7 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
     if(heuristic_grid_!=g.get()) {heuristic_cache_.clear();heuristic_grid_=g.get();}
     auto found=heuristic_cache_.find(goal);
     if(found!=heuristic_cache_.end()) return found->second;
-    std::vector<float> result;field(g,result,{goal},false,slow_near_static_obstacles_,speed_);
+    std::vector<float> result;field(g,result,{goal},false,slow_near_static_obstacles_,speed_,preferred_static_clearance_,wall_clearance_weight_);
     if(heuristic_cache_.size()>24) heuristic_cache_.clear();
     heuristic_cache_[goal]=result;return result;
   }
@@ -143,9 +150,19 @@ public:
     declare("obstacle_speeds",rclcpp::ParameterValue(std::vector<double>{}));
     declare("nominal_speed",rclcpp::ParameterValue(2.2));
     declare("slow_near_static_obstacles",rclcpp::ParameterValue(true));
+    declare("preferred_static_clearance",rclcpp::ParameterValue(.85));
+    declare("wall_clearance_weight",rclcpp::ParameterValue(3.));
+    declare("dynamic_clearance_weight",rclcpp::ParameterValue(4.));
     declare("max_planning_time",rclcpp::ParameterValue(1.5));
     node_->get_parameter(name_+".nominal_speed",speed_);
     node_->get_parameter(name_+".slow_near_static_obstacles",slow_near_static_obstacles_);
+    node_->get_parameter(name_+".preferred_static_clearance",preferred_static_clearance_);
+    node_->get_parameter(name_+".wall_clearance_weight",wall_clearance_weight_);
+    node_->get_parameter(name_+".dynamic_clearance_weight",dynamic_clearance_weight_);
+    if(!std::isfinite(preferred_static_clearance_) || preferred_static_clearance_<=0 ||
+       !std::isfinite(wall_clearance_weight_) || wall_clearance_weight_<0 ||
+       !std::isfinite(dynamic_clearance_weight_) || dynamic_clearance_weight_<0)
+      throw std::runtime_error("Invalid static-clearance route preference");
     node_->get_parameter(name_+".max_planning_time",limit_);
     std::vector<std::string> names;std::vector<double> tracks,sizes,speeds;
     node_->get_parameter(name_+".obstacle_names",names);
@@ -172,12 +189,22 @@ public:
         robot_speed_=std::hypot(msg->twist.twist.linear.x,msg->twist.twist.linear.y);
         odom_stamp_=rclcpp::Time(msg->header.stamp).seconds();
       });
+    robot_sub_=node_->create_subscription<gazebo_msgs::msg::ModelStates>(
+      "/model_states",rclcpp::SensorDataQoS(),[this](gazebo_msgs::msg::ModelStates::ConstSharedPtr msg) {
+        auto found=std::find(msg->name.begin(),msg->name.end(),"six_arm");
+        if(found==msg->name.end()) return;
+        const auto i=std::distance(msg->name.begin(),found);
+        if(size_t(i)>=msg->pose.size()) return;
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        robot_world_={msg->pose[i].position.x,msg->pose[i].position.y,tf2::getYaw(msg->pose[i].orientation)};
+        robot_stamp_=node_->now().seconds();
+      });
     debug_pub_=node_->create_publisher<std_msgs::msg::String>("/known_timed_plan",10);
     RCLCPP_INFO(node_->get_logger(),"Known-motion planner: continuous SE2/time search, no waiting actions");
   }
   void activate() override {debug_pub_->on_activate();}
   void deactivate() override {debug_pub_->on_deactivate();}
-  void cleanup() override {motion_subs_.clear();map_sub_.reset();odom_sub_.reset();grid_.reset();heuristic_cache_.clear();}
+  void cleanup() override {motion_subs_.clear();map_sub_.reset();odom_sub_.reset();robot_sub_.reset();grid_.reset();heuristic_cache_.clear();}
 
   nav_msgs::msg::Path createPlan(const geometry_msgs::msg::PoseStamped & start,
                                 const geometry_msgs::msg::PoseStamped & goal) override
@@ -185,10 +212,10 @@ public:
     const auto began=std::chrono::steady_clock::now();
     const double now=node_->now().seconds();
     nav_msgs::msg::Path result;result.header.frame_id=frame_;result.header.stamp=node_->now();
-    std::shared_ptr<Grid> grid;std::vector<Observation> observed;double current_speed;
+    std::shared_ptr<Grid> grid;std::vector<Observation> observed;double current_speed,robot_stamp;Pose2 world;
     {
       std::lock_guard<std::mutex> lock(data_mutex_);
-      grid=grid_;observed=observations_;
+      grid=grid_;observed=observations_;world=robot_world_;robot_stamp=robot_stamp_;
       current_speed=now-odom_stamp_<.5 ? robot_speed_ : 0.;
     }
     if(!grid || start.header.frame_id!=frame_ || goal.header.frame_id!=frame_) return result;
@@ -201,13 +228,19 @@ public:
     const bool virtual_start=costmap_ros_->getRobotPose(robot) &&
       std::hypot(robot.pose.position.x-start.pose.position.x,robot.pose.position.y-start.pose.position.y)>.75;
     const bool dynamic=!virtual_start && !motions_.empty();
+    const Pose2 start_pose{start.pose.position.x,start.pose.position.y,tf2::getYaw(start.pose.orientation)};
+    FrameAlignment alignment{start_pose,start_pose};
+    if(!virtual_start) {
+      if(now-robot_stamp>.20 || now<robot_stamp-.10) return result;
+      alignment.world=world;
+    }
     std::vector<std::vector<Point>> futures;
     if(dynamic) {
       for(size_t i=0;i<observed.size();++i) {
         if(!observed[i].valid || now-observed[i].stamp>.35 || observed[i].stamp-now>.15) {
           RCLCPP_WARN_THROTTLE(node_->get_logger(),*node_->get_clock(),1000,"Known obstacle state unavailable or stale");return result;
         }
-        futures.push_back(forecast(motions_[i],observed[i],now,horizon_+2));
+        futures.push_back(forecast(motions_[i],observed[i],now,horizon_+4.5));
       }
     }
     auto footprint=costmap_ros_->getRobotFootprint();
@@ -215,6 +248,8 @@ public:
     for(auto p:footprint) {hx=std::max(hx,std::abs(p.x));hy=std::max(hy,std::abs(p.y));}
     nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *> checker(grid->map.get());
     auto static_valid=[&](double x,double y,double yaw) {
+      const auto actual=alignment.toWorld({x,y,yaw});
+      x=actual.x;y=actual.y;yaw=actual.yaw;
       unsigned mx,my;if(!grid->map->worldToMap(x,y,mx,my)) return false;
       if(grid->map->getCost(mx,my)>=253) return false;
       return checker.footprintCostAtPose(x,y,yaw,footprint)<253;
@@ -229,7 +264,8 @@ public:
         for(double offset=-uncertainty;offset<=uncertainty+(searching ? .30 : .025);offset+=.10) {
           const double when=std::max(0.,t+offset);
           const size_t index=std::min(futures[i].size()-1,size_t(when/.025));
-          if(overlaps(x,y,yaw,hx,hy,futures[i][index],motions_[i].size/2+(searching ? .18 : .12))) return false;
+          const auto actual=alignment.toWorld({x,y,yaw});
+          if(overlaps(actual.x,actual.y,actual.yaw,hx,hy,futures[i][index],motions_[i].size/2+(searching ? .18 : .12))) return false;
         }
       }
       return true;
@@ -288,7 +324,9 @@ public:
         const double x=turn ? parent.x+radius*(std::sin(yaw)-std::sin(parent.yaw)) : parent.x+step_*std::cos(yaw);
         const double y=turn ? parent.y-radius*(std::cos(yaw)-std::cos(parent.yaw)) : parent.y+step_*std::sin(yaw);
         unsigned mx,my;if(!grid->map->worldToMap(x,y,mx,my)) continue;
-        const double clearance=grid->clearance[my*grid->w+mx];
+        const auto actual=alignment.toWorld({x,y,yaw});unsigned ax,ay;
+        if(!grid->map->worldToMap(actual.x,actual.y,ax,ay)) continue;
+        const double clearance=grid->clearance[ay*grid->w+ax];
         double velocity=slow_near_static_obstacles_ && clearance<1.10 ? std::min(1.2,speed_) : speed_;
         if(turn) velocity=std::max(.18,velocity*std::min(1.,std::abs(radius)/1.1));
         if(velocity>parent.v) velocity=std::min(velocity,std::sqrt(parent.v*parent.v+2*accel_*step_));
@@ -303,7 +341,12 @@ public:
           if(!valid(xx,yy,angle,parent.t+dt*f)) {clear=false;break;}
         }
         if(!clear) continue;
-        const double cost=parent.g+dt+.06*std::abs(delta)+.03*dt*std::max(0.,1.-clearance);
+        double future_risk=0;
+        if(dynamic) for(size_t i=0;i<futures.size();++i)
+          future_risk=std::max(future_risk,future_occupancy_risk(actual.x,actual.y,actual.yaw,hx,hy,
+            futures[i],arrival,motions_[i].size/2+.10));
+        const double cost=parent.g+dt*(1.+clearance_cost(clearance,preferred_static_clearance_,wall_clearance_weight_)+
+          dynamic_clearance_weight_*future_risk)+.06*std::abs(delta);
         const auto hash=key(x,y,heading,arrival);
         auto previous=best.find(hash);if(previous!=best.end()&&previous->second<=cost) continue;
         best[hash]=cost;
@@ -326,11 +369,16 @@ public:
       futures.clear();
       for(size_t i=0;i<latest.size();++i) {
         if(!latest[i].valid || latest_now-latest[i].stamp>.35) return result;
-        futures.push_back(forecast(motions_[i],latest[i],latest_now,horizon_+2));
+        futures.push_back(forecast(motions_[i],latest[i],latest_now,horizon_+4.5));
       }
       geometry_msgs::msg::PoseStamped measured;
       size_t closest=0;double minimum=1e9;
       if(costmap_ros_->getRobotPose(measured)) {
+        {
+          std::lock_guard<std::mutex> lock(data_mutex_);
+          if(latest_now-robot_stamp_>.20 || latest_now<robot_stamp_-.10) return result;
+          alignment={{measured.pose.position.x,measured.pose.position.y,tf2::getYaw(measured.pose.orientation)},robot_world_};
+        }
         for(size_t i=0;i<chain.size();++i) {
           auto n=nodes[chain[i]];
           const double d=std::hypot(measured.pose.position.x-n.x,measured.pose.position.y-n.y);
@@ -349,6 +397,18 @@ public:
         if(!valid(n.x,n.y,n.yaw,std::max(0.,n.t-offset))) {
           RCLCPP_WARN(node_->get_logger(),"Fresh-state validation rejected timed route at %.2fs",n.t-offset);
           return result;
+        }
+        // A refreshed world alignment can invalidate the arc between clear
+        // vertices. Recheck its interior, not just the published node poses.
+        if(i>closest) {
+          const auto before=nodes[chain[i-1]];
+          const double delta=wrap(n.yaw-before.yaw),radius=std::abs(delta)>1e-6 ? step_/delta : 0.;
+          for(double f=.25;f<1.;f+=.25) {
+            const double yaw=before.yaw+delta*f;
+            const double x=radius ? before.x+radius*(std::sin(yaw)-std::sin(before.yaw)) : before.x+(n.x-before.x)*f;
+            const double y=radius ? before.y-radius*(std::cos(yaw)-std::cos(before.yaw)) : before.y+(n.y-before.y)*f;
+            if(!valid(x,y,yaw,std::max(0.,before.t+(n.t-before.t)*f-offset))) return result;
+          }
         }
       }
     }

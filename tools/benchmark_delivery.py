@@ -196,10 +196,18 @@ try:
   previous=(log/'main.log').read_text(errors='replace')
   if '物块标记为已抓取' in previous:
    raise RuntimeError('Benchmark requires a fresh stack with all cubes at spawn positions')
+ ready_messages=[]
+ node.create_subscription(String,'/competition/ready',lambda m:ready_messages.append(json.loads(m.data)),10)
  pub=node.create_publisher(String,'/chat',10)
  until=time.monotonic()+20
  while pub.get_subscription_count()==0 and time.monotonic()<until:rclpy.spin_once(node,timeout_sec=.2)
  if not pub.get_subscription_count():raise RuntimeError('main not ready')
+ until=time.monotonic()+20
+ while time.monotonic()<until:
+  rclpy.spin_once(node,timeout_sec=.1)
+  main_matched=any(i.node_name=='main_controller_node' for i in node.get_subscriptions_info_by_topic('/chat'))
+  if main_matched and ready_messages and ready_messages[-1].get('ready'):break
+ else:raise RuntimeError('INFRA_MAIN_NOT_READY')
  time.sleep(start_delay)
  after_sleep=time.monotonic();until=after_sleep+10
  while (clock_wall[0] is None or clock_wall[0]<after_sleep) and time.monotonic()<until:rclpy.spin_once(node,timeout_sec=.2)
@@ -212,6 +220,11 @@ try:
  began=time.monotonic();sim_began=clock_ns[0]
  phase_start_ns[0]=int(began*1e9)
  pub.publish(String(data=json.dumps(benchmark_tasks)))
+ ack_deadline=time.monotonic()+10
+ while time.monotonic()<ack_deadline:
+  rclpy.spin_once(node,timeout_sec=.1)
+  if phase_events or '接收2个任务' in (log/'main.log').read_text(errors='replace'):break
+ else:raise RuntimeError('INFRA_TASK_NOT_ACCEPTED')
  print(f'START wall={began:.3f} sim={sim_began/1e9:.3f}',flush=True)
  last_counts=(-1,-1)
  last_arrivals=0
@@ -290,6 +303,10 @@ try:
  result['task_start_delay_seconds']=start_delay
  result['headless']=args.headless
  result['phase_events']=phase_events
+ # Preserve raw polling timing, and expose task-state timing separately.
+ if result['complete'] and phase_events and phase_events[-1]['step']=='WAIT_TASK':
+  result['task_event_wall_seconds']=phase_events[-1]['wall_seconds']
+  result['task_event_sim_seconds']=(phase_events[-1]['sim_ns']-phase_events[0]['sim_ns'])/1e9
  navigator_log = log/'navigator.log'
  prediction_log = navigator_log.read_text(errors='replace') if navigator_log.exists() else ''
  result['prediction_checks'] = dict(

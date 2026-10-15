@@ -81,6 +81,7 @@ public:
         auto found=std::find(msg->name.begin(),msg->name.end(),"six_arm");
         if(found==msg->name.end()) return;
         auto i=std::distance(msg->name.begin(),found);
+        if(size_t(i)>=msg->pose.size() || size_t(i)>=msg->twist.size()) return;
         std::lock_guard<std::mutex> lock(data_mutex_);
         robot_x_=msg->pose[i].position.x;robot_y_=msg->pose[i].position.y;
         robot_yaw_=tf2::getYaw(msg->pose[i].orientation);robot_stamp_=parent_->now().seconds();
@@ -115,7 +116,7 @@ public:
     for(size_t i=0;i<observations.size();++i) {
       if(!observations[i].valid || now-observations[i].stamp>.25 || observations[i].stamp>now+.10)
         throw nav2_core::PlannerException("Predictive obstacle state stale");
-      futures.push_back(forecast(motions_[i],observations[i],now,2.30));
+      futures.push_back(forecast(motions_[i],observations[i],now,4.30));
     }
     nav_msgs::msg::Path plan;
     double lookahead,cruise;
@@ -130,34 +131,42 @@ public:
     for(auto p:footprint) {hx=std::max(hx,std::abs(p.x));hy=std::max(hy,std::abs(p.y));}
     nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *> checker(map.get());
     const double px=pose.pose.position.x,py=pose.pose.position.y,pa=tf2::getYaw(pose.pose.orientation);
-    const double transform_angle=wrap(ra-pa),tc=std::cos(transform_angle),ts=std::sin(transform_angle);
-    // Static map uses the localization frame; actor geometry uses exact Gazebo
-    // coordinates. Align each rollout using the current robot correspondence.
+    const FrameAlignment alignment{{px,py,pa},{rx,ry,ra}};
+    // Planning and control both validate the physical world footprint using the
+    // same current localization/world correspondence, never a shifted map path.
+    std::string rejected_reason;double rejected_x=0,rejected_y=0,rejected_yaw=0,rejected_t=0;
+    auto reject=[&](const char * reason,double x,double y,double yaw,double t) {
+      rejected_reason=reason;rejected_x=x;rejected_y=y;rejected_yaw=yaw;rejected_t=t;return false;
+    };
     auto safe=[&](double x,double y,double yaw,double t) {
-      double wx=rx+(x-px)*tc-(y-py)*ts,wy=ry+(x-px)*ts+(y-py)*tc;
+      const auto actual=alignment.toWorld({x,y,yaw});
+      double wx=actual.x,wy=actual.y;
       unsigned mx,my;
       // The imported static map and simulator actors share world coordinates.
       // Check the actual footprint, including any localization heading error.
       if(!map->worldToMap(wx,wy,mx,my) || map->getCost(mx,my)>=253 ||
-        checker.footprintCostAtPose(wx,wy,yaw+transform_angle,footprint)>=253) return false;
+        checker.footprintCostAtPose(wx,wy,actual.yaw,footprint)>=253)
+        return reject("static",wx,wy,actual.yaw,t);
       for(size_t i=0;i<futures.size();++i) {
         // Include a 0.15 s state/actuation allowance around each future instant.
         for(double dt=-.15;dt<=.1501;dt+=.075) {
           size_t k=std::min(futures[i].size()-1,size_t(std::max(0.,t+dt)/.025));
-          if(overlaps(wx,wy,yaw+transform_angle,hx,hy,futures[i][k],motions_[i].size/2+.10)) return false;
+          if(overlaps(wx,wy,actual.yaw,hx,hy,futures[i][k],motions_[i].size/2+.10)) return reject("dynamic",wx,wy,actual.yaw,t);
         }
       }
       return true;
     };
     const double nominal_v=command.twist.linear.x,nominal_w=command.twist.angular.z;
     const bool rotation=std::abs(nominal_v)<.001;
-    auto rollout=[&](double cv,double cw,double scale,bool turn_only=false) {
+    auto rollout=[&](double cv,double cw,double scale,bool turn_only=false,bool brake_only=false,double prefix=.30) {
       double x=px,y=py,a=pa,v=rv,w=rw;
       size_t nearest=0;
-      for(double t=.05;t<=2.0001;t+=.05) {
+      for(double t=.05;t<=(brake_only ? 4.0001 : 2.0001);t+=.05) {
         double target_v=cv,target_w=cw;
-        if(t>.30) {
-          if(rotation || turn_only) {
+        if(t>prefix) {
+          if(brake_only) {
+            target_v=0;target_w=0;
+          } else if(std::abs(cv)<.001 || turn_only) {
             size_t carrot=0;
             while(carrot+1<plan.poses.size() && std::hypot(plan.poses[carrot].pose.position.x-x,
               plan.poses[carrot].pose.position.y-y)<lookahead) ++carrot;
@@ -185,21 +194,49 @@ public:
             target_w=std::clamp(target_v*curvature,-4.,4.);
           }
         }
-        v+=std::clamp(target_v-v,-5.*.05,3.5*.05);
-        w+=std::clamp(target_w-w,-10.*.05,10.*.05);
-        const double middle=a+w*.025;
-        x+=v*std::cos(middle)*.05;y+=v*std::sin(middle)*.05;a=wrap(a+w*.05);
+        KinematicState state{x,y,a,v,w};advance(state,target_v,target_w,.05);
+        x=state.x;y=state.y;a=state.yaw;v=state.v;w=state.w;
         if(!safe(x,y,a,t)) return false;
       }
       return true;
     };
-    double chosen_v=nominal_v,chosen_w=nominal_w;bool found=rollout(nominal_v,nominal_w,1.);
+    // Stop feasibility is a state property, independent of the proposed command.
+    // If a moving actor is about to sweep the stopped pose, do not veto every
+    // safe escape action merely because stopping there is unsafe.
+    const bool safe_to_stop=rollout(0.,0.,0.,true,true,0.);
+    auto feasible=[&](double v,double w,double scale,bool turn=false) {
+      if(!rollout(v,w,scale,turn)) return false;
+      if(!safe_to_stop) return rollout(v,w,scale,turn,true,1.0);
+      return rollout(v,w,scale,turn,true,.15) && rollout(v,w,scale,turn,true,.30);
+    };
+    double chosen_v=nominal_v,chosen_w=nominal_w;bool found=feasible(nominal_v,nominal_w,1.);
     if(!found && !rotation) {
       double best=1e9;
       for(double scale:{1.,.85,.65,.45,.25}) for(double offset:{0.,-.25,.25,-.50,.50}) {
         double v=nominal_v*scale,w=std::clamp(nominal_w*scale+offset,-4.,4.);
         double score=(1.-scale)*2.+std::abs(offset)*.8;
-        if(score<best && rollout(v,w,scale)) {best=score;chosen_v=v;chosen_w=w;found=true;}
+        if(score<best && feasible(v,w,scale)) {best=score;chosen_v=v;chosen_w=w;found=true;}
+      }
+      // A newly pruned/replanned carrot can reverse curvature abruptly. Keep
+      // physically continuous steering candidates available, not only offsets
+      // around that geometric request.
+      for(double scale:{1.,.85,.65,.45,.25}) for(double delta:{0.,-.5,.5,-1.,1.,-2.,2.}) {
+        if(safe_to_stop && std::abs(delta)>.5) continue;
+        const double v=nominal_v*scale,w=std::clamp(rw+delta,-4.,4.);
+        const double score=(1.-scale)*2.+std::abs(w-nominal_w)*.8;
+        if(score<best && feasible(v,w,scale)) {best=score;chosen_v=v;chosen_w=w;found=true;}
+      }
+    }
+    if(!found && !safe_to_stop) {
+      // Explore forward escape speeds independently of RPP's carrot slowdown.
+      // All retain the 2.2/4 limits and the same acceleration/footprint rollout.
+      double best=1e9;
+      for(double v:{cruise,.75*cruise,.5*cruise}) for(double delta:{0.,-.5,.5,-1.,1.,-2.,2.}) {
+        const double w=std::clamp(rw+delta,-4.,4.);
+        const double score=2.*(1.-v/std::max(.01,cruise))+.8*std::abs(w-nominal_w);
+        if(score<best && feasible(v,w,v/std::max(.01,cruise))) {
+          best=score;chosen_v=v;chosen_w=w;found=true;
+        }
       }
     }
     if(!found && !rotation) {
@@ -213,17 +250,33 @@ public:
         plan.poses[carrot].pose.position.x-px)-pa);
       const double requested=std::copysign(std::min(4.,std::sqrt(20.*std::abs(error))),error);
       const double angular=std::clamp(requested,rw-.5,rw+.5);
-      if(std::abs(error)>.05 && rollout(0.,angular,0.,true)) {
+      if(std::abs(error)>.05 && feasible(0.,angular,0.,true)) {
         chosen_v=0.;chosen_w=angular;found=true;
       }
     }
     if(!found) {
+      // The existing smoother admits -0.3 m/s. When forward and turning
+      // trajectories are blocked, test a bounded retreat followed by a stop;
+      // do not strand the robot simply because the global route is forward-only.
+      for(double v:{-.30,-.15}) {
+        for(double w:{0.,std::clamp(rw-.5,-4.,4.),std::clamp(rw+.5,-4.,4.)}) {
+          if(rollout(v,w,0.,false,true,1.0)) {chosen_v=v;chosen_w=w;found=true;break;}
+        }
+        if(found) break;
+      }
+    }
+    if(!found) {
+      std_msgs::msg::String debug;std::ostringstream detail;
+      detail<<"{\"sim_time\":"<<now<<",\"rejected\":true,\"nominal\":["<<nominal_v<<","<<nominal_w
+        <<"],\"robot\":["<<rx<<","<<ry<<","<<ra<<","<<rv<<","<<rw<<"],\"map_pose\":["<<px<<","<<py<<","<<pa
+        <<"],\"reason\":\""<<rejected_reason<<"\",\"predicted_collision\":["<<rejected_x<<","<<rejected_y<<","<<rejected_yaw<<","<<rejected_t<<"]}";
+      debug.data=detail.str();debug_pub_->publish(debug);
       RCLCPP_WARN_THROTTLE(parent_->get_logger(),*parent_->get_clock(),500,"No collision-free short-horizon command; request replanning");
       throw nav2_core::PlannerException("No safe predictive command");
     }
     command.twist.linear.x=chosen_v;command.twist.angular.z=chosen_w;
     std_msgs::msg::String debug;std::ostringstream stream;
-    stream<<"{\"sim_time\":"<<now<<",\"nominal\":["<<nominal_v<<","<<nominal_w<<"],\"selected\":["<<chosen_v<<","<<chosen_w<<"]}";
+    stream<<"{\"sim_time\":"<<now<<",\"nominal\":["<<nominal_v<<","<<nominal_w<<"],\"escape\":"<<(!safe_to_stop ? "true" : "false")<<",\"retreat\":"<<(chosen_v<-.001 ? "true" : "false")<<",\"selected\":["<<chosen_v<<","<<chosen_w<<"]}";
     debug.data=stream.str();debug_pub_->publish(debug);
     return command;
   }

@@ -123,8 +123,8 @@
 
         <gazebo reference="${prefix}_wheel_link">
             <material>Gazebo/Gray</material>
-            <mu1>1.0</mu1>  <!-- 静摩擦系数 -->
-            <mu2>1.0</mu2>  <!-- 动摩擦系数 -->
+            <mu1>1.0</mu1>  <!-- 驱动轮第一方向摩擦系数 -->
+            <mu2>1.0</mu2>  <!-- 驱动轮第二方向摩擦系数 -->
             <kp>1000000.0</kp>  <!-- 接触刚度（防止穿透） -->
             <kd>100.0</kd>    <!-- 接触阻尼（抑制弹飞） -->
             <minDepth>0.001</minDepth> <!-- 最小穿透深度 -->
@@ -146,7 +146,7 @@
             <wheel_diameter>${2*wheel_radius}</wheel_diameter>
 
             <!-- limits -->
-            <max_wheel_torque>20</max_wheel_torque>
+            <max_wheel_torque>1000</max_wheel_torque>
             <!-- Nav2 velocity_smoother handles commanded acceleration and braking. -->
             <max_wheel_acceleration>0.0</max_wheel_acceleration>
 

@@ -302,6 +302,9 @@ planner_server:
       - 0.35
       - 0.35
       slow_near_static_obstacles: false
+      preferred_static_clearance: 0.85
+      wall_clearance_weight: 3.0
+      dynamic_clearance_weight: 4.0
 planner_server_rclcpp_node:
   ros__parameters:
     use_sim_time: true

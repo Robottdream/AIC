@@ -118,7 +118,11 @@ def main():
     world = ET.SubElement(root, 'world', name='default')
     for tag in ['light', 'physics']:
         world.append(copy.deepcopy(stable.find(tag)))
-    world.append(copy.deepcopy(stable.find("model[@name='ground_plane']")))
+    world.find('physics/ode/constraints/contact_max_correcting_vel').text = '100'
+    ground = copy.deepcopy(stable.find("model[@name='ground_plane']"))
+    for coefficient in ("mu", "mu2"):
+        ground.find("link/collision/surface/friction/ode/" + coefficient).text = "1"
+    world.append(ground)
     office = copy.deepcopy(imported.find("model[@name='officeroom']"))
     world.append(office)
     static_obstacles = copy.deepcopy(imported.find("model[@name='Untitled']"))
@@ -246,7 +250,7 @@ def main():
         params['inflation_layer']['inflation_radius'] = 1.0
 
     navigation['planner_server']['ros__parameters']['GridBased'] = dict(
-        plugin='aic_timed_planner/TimeAwarePlanner', nominal_speed=2.2, max_planning_time=1.5, slow_near_static_obstacles=False,
+        plugin='aic_timed_planner/TimeAwarePlanner', nominal_speed=2.2, max_planning_time=1.5, slow_near_static_obstacles=False, preferred_static_clearance=.85, wall_clearance_weight=3., dynamic_clearance_weight=4.,
         obstacle_names=[o['name'] for o in OBSTACLES],
         obstacle_tracks=[v for o in OBSTACLES for p in (o['start'],o['end']) for v in p],
         obstacle_sizes=[o['size'] for o in OBSTACLES], obstacle_speeds=[o['speed'] for o in OBSTACLES])
