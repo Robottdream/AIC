@@ -118,7 +118,7 @@ def main():
     world = ET.SubElement(root, 'world', name='default')
     for tag in ['light', 'physics']:
         world.append(copy.deepcopy(stable.find(tag)))
-    world.find('physics/ode/constraints/contact_max_correcting_vel').text = '100'
+    world.find('physics/ode/constraints/contact_max_correcting_vel').text = '200'
     ground = copy.deepcopy(stable.find("model[@name='ground_plane']"))
     for coefficient in ("mu", "mu2"):
         ground.find("link/collision/surface/friction/ode/" + coefficient).text = "1"

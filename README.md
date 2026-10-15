@@ -51,6 +51,8 @@ Foxglove 导入 `demo1.json`，普通主入口连接 `ws://localhost:9090`；USB
 
 ## 当前参数与验证
 
+2026-10-15后续本地试验：世界与生成器的`contact_max_correcting_vel`已改为**200**，正式导航目标仍为2.2 m/s。隔离空场测试2.5/3.0/3.5 m/s，每档直行和圆弧各重复两次。直行均达目标；3.0/3.5圆弧出现轮速已到位、车身偏航加剧与轨迹内卷，不能当作跟踪通过。详情见[三档速度、轮速换算与实测](docs/linear-speed-limits-20261015.md)。以下100档的五件成绩属于此前发布验证，200未跑完整五件。
+
 2026-10-15 发布准备采用2026-10-14跑通五件的导航源码和配置。直行目标2.2 m/s、角速度4 rad/s、角加减速度10 rad/s²，单轮转矩上限1000 Nm，世界`contact_max_correcting_vel=100`，驱动轮与地面两个摩擦方向均为1；Gazebo单轮加速度限幅关闭。底盘10 kg、驱动轮各1 kg；货物质量0.1 kg、边长3 cm、主惯量0.000015 kg·m²。
 
 新地图使用实时滚动预测规划，控制20 Hz、目标重规划5 Hz；不插入固定等待点，不封锁移动障碍整条轨道。静态净距与动态轨迹采用软代价，真实轮廓和预测碰撞检查保留；墙边距离减速和RPP代价减速关闭。默认终点检查采用本轮实测的SimpleGoalChecker。
@@ -61,7 +63,7 @@ Foxglove 导入 `demo1.json`，普通主入口连接 `ws://localhost:9090`；USB
 
 基准工具等待主控空闲及订阅匹配后只发一次任务，并检查接收确认；不重复发送任务。结果保留原有轮询计时，并在完整完成时额外输出`task_event_wall_seconds`、`task_event_sim_seconds`。
 
-- [小地图测试与绘图交接](docs/small-map-testing-handoff-20261015.md)
+- [小地图测试、运动诊断与轨迹绘图手册](docs/small-map-testing-handoff-20261015.md)：测试协议、实测结果、计时口径、坐标与指标、脚本复用和故障排查。
 - [100档五件实测、路径与速度图](docs/limit100-flow-20261014.md)
 - [ODE约束20/34/60对照与真实关节转速](docs/contact-limit-20261014.md)
 - [固定摩擦1的扭矩对照](docs/torque-sweep-20261014.md)
@@ -72,3 +74,9 @@ Foxglove 导入 `demo1.json`，普通主入口连接 `ws://localhost:9090`；USB
 - [USB无界面运行](docs/usb-headless-20261009.md)
 
 历史日期文档描述当时的配置，不作为当前参数入口；以当前场景文件和本README为准。
+
+空场物理对照可用 [自动测试脚本](tools/physics_benchmark/README.md) 一条命令完成启动、采样、停栈和出图；ODE100/200的有限对照与脚本集成验证见 [2026-10-15记录](docs/ode100-vs200-20261015.md)。
+
+高速圆弧的步长、求解器与有限旋转对照已接入同一工具的 --suite numerical；十次冷启动没有得到可采用的修复，失败记录与限制见 [数值求解对照](docs/high-speed-numerical-20261015.md)。
+
+匹配实时率后的1/2/4 ms复测十二项输入有效，圆弧响应仍异常，见[加长步长复核](docs/longer-step-20261015.md)。参考项目的车体PID与直接施力模型核对见[pb2025底盘分析](docs/pb2025-drive-reference-20261015.md)。
