@@ -61,6 +61,7 @@ Foxglove 导入 `demo1.json`，普通主入口连接 `ws://localhost:9090`；USB
 
 基准工具等待主控空闲及订阅匹配后只发一次任务，并检查接收确认；不重复发送任务。结果保留原有轮询计时，并在完整完成时额外输出`task_event_wall_seconds`、`task_event_sim_seconds`。
 
+- [小地图测试与绘图交接](docs/small-map-testing-handoff-20261015.md)
 - [100档五件实测、路径与速度图](docs/limit100-flow-20261014.md)
 - [ODE约束20/34/60对照与真实关节转速](docs/contact-limit-20261014.md)
 - [固定摩擦1的扭矩对照](docs/torque-sweep-20261014.md)
