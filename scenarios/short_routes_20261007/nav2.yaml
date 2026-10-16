@@ -127,7 +127,7 @@ controller_server:
       yaw_goal_tolerance: 0.1
     FollowPath:
       plugin: aic_timed_planner/TimeAwareController
-      desired_linear_vel: 2.2
+      desired_linear_vel: 6.0
       lookahead_dist: 0.55
       min_lookahead_dist: 0.35
       max_lookahead_dist: 1.5
@@ -168,6 +168,10 @@ controller_server:
       obstacle_speeds:
       - 0.35
       - 0.35
+      linear_acceleration: 10.0
+      linear_deceleration: 10.0
+      max_angular_velocity: 4.0
+      angular_deceleration: 10.0
 controller_server_rclcpp_node:
   ros__parameters:
     use_sim_time: true
@@ -281,7 +285,7 @@ planner_server:
     - GridBased
     GridBased:
       plugin: aic_timed_planner/TimeAwarePlanner
-      nominal_speed: 2.2
+      nominal_speed: 6.0
       max_planning_time: 1.5
       obstacle_names:
       - design_obstacle_left
@@ -305,6 +309,11 @@ planner_server:
       preferred_static_clearance: 0.85
       wall_clearance_weight: 3.0
       dynamic_clearance_weight: 4.0
+      linear_acceleration: 10.0
+      linear_deceleration: 10.0
+      max_angular_velocity: 4.0
+      angular_acceleration: 10.0
+      angular_deceleration: 10.0
 planner_server_rclcpp_node:
   ros__parameters:
     use_sim_time: true
@@ -363,7 +372,7 @@ velocity_smoother:
     feedback: OPEN_LOOP
     scale_velocities: false
     max_velocity:
-    - 2.2
+    - 6.0
     - 0.0
     - 4.0
     min_velocity:
@@ -371,11 +380,11 @@ velocity_smoother:
     - 0.0
     - -4.0
     max_accel:
-    - 3.5
+    - 10.0
     - 0.0
     - 10.0
     max_decel:
-    - -5.0
+    - -10.0
     - 0.0
     - -10.0
     velocity_timeout: 1.0

@@ -10,6 +10,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist, Pose
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from rclpy.action import ActionClient
+TERMINAL_FAILURE_MESSAGES = ('停止以避免误报完成', '目标区域导航失败：', '放置连续失败，停止后续任务', '物块放置位置修正三次仍失败', '当前没有可达且可返回目标区域的同色物块', '路径预检服务不可用', '没有可选的')
 parser = argparse.ArgumentParser(description="Gazebo delivery benchmark; excludes language parsing latency")
 parser.add_argument('--log-dir', required=True)
 parser.add_argument('--timeout', type=float, default=380.)
@@ -286,7 +287,7 @@ try:
    print(f'PROGRESS grabs={counts[0]} places={counts[1]} wall={time.monotonic()-began:.1f}s sim={(clock_ns[0]-sim_began)/1e9:.1f}s',flush=True)
    last_counts=counts
   if '所有优化任务执行完成' in s:break
-  if any(reason in s for reason in ('停止以避免误报完成', '目标区域导航失败：', '放置连续失败，停止后续任务', '物块放置位置修正三次仍失败', '当前没有可达且可返回目标区域的同色物块', '路径预检服务不可用')):break
+  if any(reason in s for reason in TERMINAL_FAILURE_MESSAGES):break
   if any(p.poll() is not None for p,_ in processes):raise RuntimeError('child exited')
  aborted=instability[0] or collision[0]
  elapsed=aborted['wall_seconds'] if aborted else time.monotonic()-began
@@ -300,6 +301,7 @@ try:
  mean_moving_speed=sum(moving_samples)/len(moving_samples) if moving_samples else 0.0
  result=dict(timing_scope='parsed /chat publish to task completion or terminal failure; excludes language parsing',wall_seconds=elapsed,sim_seconds=sim_elapsed,peak_odom_linear_mps=max(speed_samples,default=0.0),moving_fraction_at_least_062=fraction_above_062,mean_moving_speed_mps=mean_moving_speed,peak_nav_command_mps=max(nav_command_speeds,default=0.0),peak_base_command_mps=max(base_command_speeds,default=0.0),seconds=elapsed,complete=not instability[0] and not collision[0] and '所有优化任务执行完成' in s,grasp_count=s.count('机械臂抓取成功'),place_count=s.count('机械臂放置成功'),arrivals=arrivals,placements=placements)
  result['aborted_for_collision']=collision[0]
+ result['terminal_failure_reason']=next((reason for reason in TERMINAL_FAILURE_MESSAGES if reason in s),None)
  result['task_start_delay_seconds']=start_delay
  result['headless']=args.headless
  result['phase_events']=phase_events

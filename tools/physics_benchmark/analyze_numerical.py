@@ -15,7 +15,7 @@ from matplotlib import font_manager
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
-LABELS = {'baseline': '基线 quick / 1 ms', 'step-half': 'quick / 0.5 ms',
+LABELS = {'wheel': '轮子电机驱动', 'body_force': '车体力闭环驱动', 'baseline': '基线 quick / 1 ms', 'step-half': 'quick / 0.5 ms',
           'step-quarter': 'quick / 0.25 ms', 'step-double': 'quick / 2 ms',
           'step-quadruple': 'quick / 4 ms', 'world': 'world / 1 ms',
           'finite': 'quick / 1 ms + 有限旋转'}
@@ -84,6 +84,7 @@ def verify_world(folder, config):
 def collect(out, protocol):
     rows, arcs, headers, worlds, robot_hashes, nav_hashes, task_hashes = [], [], [], [], [], [], []
     failures, failed_arcs = [], []
+    normalized_robots, grouped_robot_hashes = [], {}
     for boot, variant in enumerate(protocol['order'], 1):
         folder = out / f'boot-{boot}-{variant}'
         config = protocol['profiles'][variant]
@@ -112,6 +113,18 @@ def collect(out, protocol):
             failure['phase'] = 'preflight_robot_description'
             continue
         robot_hashes.append(hashlib.sha256((folder / 'live-robot.urdf').read_bytes()).hexdigest())
+        if protocol.get('suite') == 'drive':
+            driver = config['drive']
+            expected = 0 if driver == 'body_force' else protocol['expected_torque']
+            assert header['left_motor_fmax'] == header['right_motor_fmax'] == expected
+            check = json.loads((folder / 'drive-verification.json').read_text())
+            assert check == dict(drive=driver, mutually_exclusive=True)
+            grouped_robot_hashes.setdefault(driver, set()).add(robot_hashes[-1])
+            robot = ET.parse(folder / 'live-robot.urdf').getroot()
+            for gazebo in list(robot.findall('gazebo')):
+                if any(plugin.attrib.get('name') in ('differential_drive_controller','body_force_controller') for plugin in gazebo.findall('plugin')):
+                    robot.remove(gazebo)
+            normalized_robots.append(ET.tostring(robot))
         nav_hashes.append(hashlib.sha256((folder / 'nav2.yaml').read_bytes()).hexdigest())
         task_hashes.append(hashlib.sha256((folder / 'tasks.yaml').read_bytes()).hexdigest())
         if not (folder / 'runtime-parameters.json').exists():
@@ -180,9 +193,17 @@ def collect(out, protocol):
             rows.append(row)
             if record['name'] == 'arc-w2':
                 arcs.append((row, seq, trace, ref))
-    assert len(set(worlds)) == len(set(robot_hashes)) == len(set(nav_hashes)) == len(set(task_hashes)) == 1
+    if not rows:
+        (out / 'failures.json').write_text(json.dumps(failures, indent=2))
+        (out / 'verification.json').write_text(json.dumps(dict(completed_input_valid_trials=0, failed_boots=len(failures), cold_starts=len(protocol['order']), motion_verified=False), indent=2))
+        return rows, arcs, failures, failed_arcs
+    assert len(set(worlds)) == len(set(nav_hashes)) == len(set(task_hashes)) == 1
+    if protocol.get('suite') == 'drive':
+        assert len(set(normalized_robots)) == 1 and all(len(v) == 1 for v in grouped_robot_hashes.values())
+    else:
+        assert len(set(robot_hashes)) == 1
     (out / 'native-runtime.json').write_text(json.dumps(headers, indent=2))
-    (out / 'verification.json').write_text(json.dumps(dict(completed_input_valid_trials=len(rows), failed_boots=len(failures), cold_starts=len(protocol['order']), worlds_equivalent_outside_intended_parameters=True, robot_descriptions_identical=True, robot_sha256=robot_hashes[0], navigation_and_tasks_identical=True), indent=2))
+    (out / 'verification.json').write_text(json.dumps(dict(completed_input_valid_trials=len(rows), failed_boots=len(failures), cold_starts=len(protocol['order']), worlds_equivalent_outside_intended_parameters=True, robot_descriptions_identical=len(set(robot_hashes)) == 1, robot_equal_except_drive_plugin=protocol.get('suite') == 'drive', robot_sha256_by_drive={k:list(v)[0] for k,v in grouped_robot_hashes.items()}, robot_sha256=robot_hashes[0], navigation_and_tasks_identical=True), indent=2))
     (out / 'failures.json').write_text(json.dumps(failures, indent=2))
     return rows, arcs, failures, failed_arcs
 
@@ -242,7 +263,7 @@ def responses(out, arcs, protocol, variants, colors, failed_arcs, geometry=False
         ax.set_xlabel('相对动作开始 / 仿真秒'); ax.set_ylabel(ylabel); ax.grid(alpha=.2)
     axes[0, 0].legend(fontsize=8)
     fig.suptitle('高速圆弧：轮轴约束、车身姿态与侧向运动' if geometry else f"高速圆弧物理对照：目标{protocol['target_v']:g} m/s、{protocol['target_w']:g} rad/s", fontsize=17)
-    fig.text(.5, .015, '实线/阴影：完整动作均值/范围；点线与叉号：中断记录。原生仿真采样。转矩上限1000 Nm、摩擦1、接触纠偏上限200保持；竖线为请求停车。', ha='center', fontsize=9)
+    fig.text(.5, .015, ('实线/阴影：完整动作均值/范围。摩擦1、ODE200、1 ms；旧驱动轮矩1000 Nm，新驱动限力150/200 N、偏航矩100 Nm。竖线为请求停车。' if protocol.get('suite') == 'drive' else '实线/阴影：完整动作均值/范围；点线与叉号：中断记录。原生仿真采样。转矩上限1000 Nm、摩擦1、接触纠偏上限200保持；竖线为请求停车。'), ha='center', fontsize=9)
     fig.tight_layout(rect=(0, .035, 1, .95))
     fig.savefig(out / ('geometry-comparison.png' if geometry else 'response-comparison.png'), dpi=170)
     plt.close(fig)
@@ -277,7 +298,7 @@ def trajectories(out, arcs, protocol, variants, failed_arcs):
     if legend_axis is None: fig.text(.5, .025, '彩色：第1次实际；紫色点线：第2次实际；灰色虚线：指令积分；叉号：记录结束。各图同坐标与色标，不是Nav2规划路径。', ha='center', fontsize=9)
     fig.subplots_adjust(left=.055, right=.91, top=.90, bottom=.09, wspace=.28, hspace=.27)
     bar = fig.add_axes([.94, .25, .012, .5]); fig.colorbar(line, cax=bar, label='实际水平速度 / m/s')
-    fig.suptitle('物理求解对照：实际与指令预期轨迹', fontsize=18)
+    fig.suptitle(('驱动方案对照：实际与指令预期轨迹' if protocol.get('suite') == 'drive' else '物理求解对照：实际与指令预期轨迹'), fontsize=18)
     fig.savefig(out / 'trajectories.png', dpi=170); plt.close(fig)
 
 
@@ -287,13 +308,18 @@ def main():
     font = Path('/mnt/c/Windows/Fonts/msyh.ttc')
     if font.exists(): font_manager.fontManager.addfont(str(font)); plt.rcParams['font.family'] = ['Microsoft YaHei', 'DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
-    rows, arcs, failures, failed_arcs = collect(out, protocol); summary = summaries(rows, variants)
+    rows, arcs, failures, failed_arcs = collect(out, protocol)
+    if not rows:
+        (out / 'REPORT.md').write_text('# No valid motion trials\n\nAll boot attempts failed or stopped before a completed motion. Inspect failures.json and original launch logs. No plots or response-success claims were produced.\n')
+        print('NO VALID MOTION TRIALS; failures preserved, no plots produced')
+        return
+    summary = summaries(rows, variants)
     (out / 'individual-metrics.json').write_text(json.dumps(rows, indent=2)); (out / 'metrics.json').write_text(json.dumps(summary, indent=2))
     with (out / 'individual-metrics.csv').open('w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=rows[0]); writer.writeheader(); writer.writerows(rows)
     colors = {variant: plt.get_cmap('tab10')(i) for i, variant in enumerate(variants)}
     responses(out, arcs, protocol, variants, colors, failed_arcs); responses(out, arcs, protocol, variants, colors, failed_arcs, geometry=True); trajectories(out, arcs, protocol, variants, failed_arcs)
-    lines = ['# 高速圆弧数值求解对照', '', f"顺序：{protocol['order']}；每次独立冷启动，直行和圆弧各一次。目标{protocol['target_v']} m/s，圆弧{protocol['target_w']} rad/s。", '',
+    lines = ['# 高速圆弧驱动对照' if protocol.get('suite') == 'drive' else '# 高速圆弧数值求解对照', '', f"顺序：{protocol['order']}；每次独立冷启动，直行和圆弧各一次。目标{protocol['target_v']} m/s，圆弧{protocol['target_w']} rad/s。", '',
              ('摩擦1、转矩上限1000 Nm、contact_max_correcting_vel=200、CFM=0保持。物理更新频率按1/步长同步调整，名义实时率保持1，以免墙钟定时器改变每仿真秒的控制频率；这是时间节奏调整，不是额外改变物理积分。' if protocol.get('paced_realtime') else '摩擦1、转矩上限1000 Nm、contact_max_correcting_vel=200、CFM=0保持。物理更新频率1000 Hz配置保持；步长会改变实时率与墙钟控制器的仿真时间行为，不宜当作纯步长因果对照。'), '',
              '| 配置 | 次数 | 圆弧后段前向速度 m/s | 圆弧后段角速度 rad/s | 含停车最大角速度 rad/s | 最大轮轴偏角 ° |', '|---|---|---|---|---|---|']
     for item in summary:
@@ -302,6 +328,8 @@ def main():
     for variant in variants:
         if not any(item['variant'] == variant and item['case'] == 'arc-w2' for item in summary):
             lines.append(f"| {LABELS[variant]} | 0 | 中断/未完成 | — | — | — |")
+    if protocol.get('suite') == 'drive':
+        lines[4] = '仅驱动插件不同，机器人质量/摩擦1/接触ODE200/1 ms/quick60保持。旧方案轮子电机上限1000 Nm；新方案轮子无电机，车体纵横向限力150/200 N、偏航限矩100 Nm。新方案轮速是被动滚动测量，不作为执行指令。'
     lines += ['', '## 直行与时间节奏核验', '', '| 配置 | 直行次数 | 后段直行均速 m/s | 所有完整动作仿真/墙钟比范围 |', '|---|---|---|---|']
     for variant in variants:
         straight = [r for r in rows if r['variant'] == variant and r['case'] == 'straight']

@@ -59,6 +59,8 @@ simple_nav2_navigator:
     - 0.35
     - 0.35
     slow_near_static_obstacles: false
+    crossing_cruise_speed: 6.0
+    crossing_acceleration: 10.0
 arm_grab_place_node:
   ros__parameters:
     zone_centers:

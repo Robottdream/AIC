@@ -29,6 +29,8 @@ class TimeAwareController : public nav2_regulated_pure_pursuit_controller::Regul
   rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr debug_pub_;
   double robot_x_=0,robot_y_=0,robot_yaw_=0,robot_stamp_=-1;
   double robot_v_=0,robot_w_=0;
+  MotionLimits limits_;
+  double control_dt_=.05;
 
 public:
   void configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
@@ -41,6 +43,19 @@ public:
     auto declare=[&](const std::string & key,const rclcpp::ParameterValue & value) {
       nav2_util::declare_parameter_if_not_declared(parent_,name+"."+key,value);
     };
+    declare("linear_acceleration",rclcpp::ParameterValue(3.5));
+    declare("linear_deceleration",rclcpp::ParameterValue(5.));
+    declare("angular_deceleration",rclcpp::ParameterValue(10.));
+    declare("max_angular_velocity",rclcpp::ParameterValue(4.));
+    parent_->get_parameter(name+".linear_acceleration",limits_.linear_accel);
+    parent_->get_parameter(name+".linear_deceleration",limits_.linear_decel);
+    parent_->get_parameter(name+".max_angular_accel",limits_.angular_accel);
+    parent_->get_parameter(name+".angular_deceleration",limits_.angular_decel);
+    parent_->get_parameter(name+".max_angular_velocity",limits_.max_angular_velocity);
+    const double frequency=parent_->get_parameter("controller_frequency").as_double();
+    if(!limits_.valid() || !std::isfinite(frequency) || frequency<=0)
+      throw std::runtime_error("Invalid predictive controller motion limits");
+    control_dt_=1./frequency;
     declare("obstacle_names",rclcpp::ParameterValue(std::vector<std::string>{}));
     declare("obstacle_tracks",rclcpp::ParameterValue(std::vector<double>{}));
     declare("obstacle_sizes",rclcpp::ParameterValue(std::vector<double>{}));
@@ -156,8 +171,16 @@ public:
       }
       return true;
     };
-    const double nominal_v=command.twist.linear.x,nominal_w=command.twist.angular.z;
+    const double nominal_v=command.twist.linear.x;double nominal_w=std::clamp(command.twist.angular.z,-limits_.max_angular_velocity,limits_.max_angular_velocity);
     const bool rotation=std::abs(nominal_v)<.001;
+    if(rotation && !plan.poses.empty()) {
+      size_t carrot=0;
+      while(carrot+1<plan.poses.size() && std::hypot(plan.poses[carrot].pose.position.x-px,plan.poses[carrot].pose.position.y-py)<lookahead) ++carrot;
+      const double target=std::hypot(plan.poses.back().pose.position.x-px,plan.poses.back().pose.position.y-py)<.20 ?
+        tf2::getYaw(plan.poses.back().pose.orientation) : std::atan2(plan.poses[carrot].pose.position.y-py,plan.poses[carrot].pose.position.x-px);
+      const double brake_speed=std::sqrt(2.*limits_.angular_decel*std::abs(wrap(target-pa)));
+      nominal_w=std::clamp(nominal_w,-brake_speed,brake_speed);
+    }
     auto rollout=[&](double cv,double cw,double scale,bool turn_only=false,bool brake_only=false,double prefix=.30) {
       double x=px,y=py,a=pa,v=rv,w=rw;
       size_t nearest=0;
@@ -174,7 +197,7 @@ public:
               tf2::getYaw(plan.poses.back().pose.orientation) :
               std::atan2(plan.poses[carrot].pose.position.y-y,plan.poses[carrot].pose.position.x-x);
             const double error=wrap(target-a);
-            target_v=0;target_w=std::copysign(std::min(4.,std::sqrt(20.*std::abs(error))),error);
+            target_v=0;target_w=std::copysign(std::min(limits_.max_angular_velocity,std::sqrt(2.*limits_.angular_decel*std::abs(error))),error);
           } else {
             double distance=1e9;
             for(size_t i=nearest;i<plan.poses.size();++i) {
@@ -191,10 +214,10 @@ public:
             double remain=std::hypot(plan.poses.back().pose.position.x-x,plan.poses.back().pose.position.y-y);
             target_v=scale*std::min(cruise,std::max(.08,cruise*remain/1.2));
             if(radius<1.1) target_v=std::min(target_v,std::max(.18,cruise*radius/1.1));
-            target_w=std::clamp(target_v*curvature,-4.,4.);
+            target_w=std::clamp(target_v*curvature,-limits_.max_angular_velocity,limits_.max_angular_velocity);
           }
         }
-        KinematicState state{x,y,a,v,w};advance(state,target_v,target_w,.05);
+        KinematicState state{x,y,a,v,w};advance(state,target_v,target_w,.05,limits_);
         x=state.x;y=state.y;a=state.yaw;v=state.v;w=state.w;
         if(!safe(x,y,a,t)) return false;
       }
@@ -213,7 +236,7 @@ public:
     if(!found && !rotation) {
       double best=1e9;
       for(double scale:{1.,.85,.65,.45,.25}) for(double offset:{0.,-.25,.25,-.50,.50}) {
-        double v=nominal_v*scale,w=std::clamp(nominal_w*scale+offset,-4.,4.);
+        double v=nominal_v*scale,w=std::clamp(nominal_w*scale+offset,-limits_.max_angular_velocity,limits_.max_angular_velocity);
         double score=(1.-scale)*2.+std::abs(offset)*.8;
         if(score<best && feasible(v,w,scale)) {best=score;chosen_v=v;chosen_w=w;found=true;}
       }
@@ -222,17 +245,17 @@ public:
       // around that geometric request.
       for(double scale:{1.,.85,.65,.45,.25}) for(double delta:{0.,-.5,.5,-1.,1.,-2.,2.}) {
         if(safe_to_stop && std::abs(delta)>.5) continue;
-        const double v=nominal_v*scale,w=std::clamp(rw+delta,-4.,4.);
+        const double v=nominal_v*scale,w=std::clamp(rw+delta,-limits_.max_angular_velocity,limits_.max_angular_velocity);
         const double score=(1.-scale)*2.+std::abs(w-nominal_w)*.8;
         if(score<best && feasible(v,w,scale)) {best=score;chosen_v=v;chosen_w=w;found=true;}
       }
     }
     if(!found && !safe_to_stop) {
       // Explore forward escape speeds independently of RPP's carrot slowdown.
-      // All retain the 2.2/4 limits and the same acceleration/footprint rollout.
+      // All retain the configured speed/acceleration limits and footprint rollout.
       double best=1e9;
       for(double v:{cruise,.75*cruise,.5*cruise}) for(double delta:{0.,-.5,.5,-1.,1.,-2.,2.}) {
-        const double w=std::clamp(rw+delta,-4.,4.);
+        const double w=std::clamp(rw+delta,-limits_.max_angular_velocity,limits_.max_angular_velocity);
         const double score=2.*(1.-v/std::max(.01,cruise))+.8*std::abs(w-nominal_w);
         if(score<best && feasible(v,w,v/std::max(.01,cruise))) {
           best=score;chosen_v=v;chosen_w=w;found=true;
@@ -248,8 +271,8 @@ public:
             plan.poses[carrot].pose.position.y-py)<lookahead) ++carrot;
       const double error=wrap(std::atan2(plan.poses[carrot].pose.position.y-py,
         plan.poses[carrot].pose.position.x-px)-pa);
-      const double requested=std::copysign(std::min(4.,std::sqrt(20.*std::abs(error))),error);
-      const double angular=std::clamp(requested,rw-.5,rw+.5);
+      const double requested=std::copysign(std::min(limits_.max_angular_velocity,std::sqrt(2.*limits_.angular_decel*std::abs(error))),error);
+      const double angular=std::clamp(requested,rw-limits_.angular_accel*control_dt_,rw+limits_.angular_accel*control_dt_);
       if(std::abs(error)>.05 && feasible(0.,angular,0.,true)) {
         chosen_v=0.;chosen_w=angular;found=true;
       }
@@ -259,7 +282,7 @@ public:
       // trajectories are blocked, test a bounded retreat followed by a stop;
       // do not strand the robot simply because the global route is forward-only.
       for(double v:{-.30,-.15}) {
-        for(double w:{0.,std::clamp(rw-.5,-4.,4.),std::clamp(rw+.5,-4.,4.)}) {
+        for(double w:{0.,std::clamp(rw-.5,-limits_.max_angular_velocity,limits_.max_angular_velocity),std::clamp(rw+.5,-limits_.max_angular_velocity,limits_.max_angular_velocity)}) {
           if(rollout(v,w,0.,false,true,1.0)) {chosen_v=v;chosen_w=w;found=true;break;}
         }
         if(found) break;

@@ -49,6 +49,8 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
   std::unordered_map<unsigned,std::vector<float>> heuristic_cache_;
   const Grid * heuristic_grid_=nullptr;
   double speed_=2.2,accel_=3.5,decel_=5.,limit_=1.5,horizon_=90.;
+  double max_angular_velocity_=4.,angular_acceleration_=10.,angular_deceleration_=10.;
+  double turnTime(double angle) const {return turn_time(angle,max_angular_velocity_,angular_acceleration_,angular_deceleration_);}
   double robot_speed_=0.,odom_stamp_=0.;
   bool slow_near_static_obstacles_=true;
   double preferred_static_clearance_=.85,wall_clearance_weight_=3.,dynamic_clearance_weight_=4.;
@@ -149,6 +151,18 @@ public:
     declare("obstacle_sizes",rclcpp::ParameterValue(std::vector<double>{}));
     declare("obstacle_speeds",rclcpp::ParameterValue(std::vector<double>{}));
     declare("nominal_speed",rclcpp::ParameterValue(2.2));
+    declare("linear_acceleration",rclcpp::ParameterValue(3.5));
+    declare("linear_deceleration",rclcpp::ParameterValue(5.));
+    declare("max_angular_velocity",rclcpp::ParameterValue(4.));
+    declare("angular_acceleration",rclcpp::ParameterValue(10.));
+    declare("angular_deceleration",rclcpp::ParameterValue(10.));
+    node_->get_parameter(name_+".linear_acceleration",accel_);
+    node_->get_parameter(name_+".linear_deceleration",decel_);
+    node_->get_parameter(name_+".max_angular_velocity",max_angular_velocity_);
+    node_->get_parameter(name_+".angular_acceleration",angular_acceleration_);
+    node_->get_parameter(name_+".angular_deceleration",angular_deceleration_);
+    if(!MotionLimits{accel_,decel_,angular_acceleration_,max_angular_velocity_,angular_deceleration_}.valid())
+      throw std::runtime_error("Invalid planner motion limits");
     declare("slow_near_static_obstacles",rclcpp::ParameterValue(true));
     declare("preferred_static_clearance",rclcpp::ParameterValue(.85));
     declare("wall_clearance_weight",rclcpp::ParameterValue(3.));
@@ -289,7 +303,7 @@ public:
     const int nearest=(int(std::round(start_yaw*headings_/(2*PI)))%headings_+headings_)%headings_;
     for(int h=0;h<headings_;++h) {
       if(!virtual_start && current_speed>.10 && h!=nearest) continue;
-      const double yaw=h*2*PI/headings_,rotation=wrap(yaw-start_yaw),dt=turn_time(rotation);
+      const double yaw=h*2*PI/headings_,rotation=wrap(yaw-start_yaw),dt=turnTime(rotation);
       bool clear=true;
       for(double f=0;f<=1.001;f+=.10) {
         if(!valid(start.pose.position.x,start.pose.position.y,start_yaw+rotation*f,dt*f)) {clear=false;break;}
@@ -309,7 +323,7 @@ public:
       if(nodes.size()>600000) break;
       const double distance=std::hypot(parent.x-goal.pose.position.x,parent.y-goal.pose.position.y);
       if(distance<.13) {
-        const double delta=wrap(goal_yaw-parent.yaw),dt=turn_time(delta);
+        const double delta=wrap(goal_yaw-parent.yaw),dt=turnTime(delta);
         bool clear=true;
         for(double f=0;f<=1.001;f+=.10) {
           const double x=parent.x+f*(goal.pose.position.x-parent.x),y=parent.y+f*(goal.pose.position.y-parent.y);
@@ -390,7 +404,7 @@ public:
       if(closest==0) {
         // At a stationary start the initial alignment is still ahead, not
         // elapsed progress. Preserve its remaining time in the forecast.
-        offset-=turn_time(nodes[chain[0]].yaw-tf2::getYaw(measured.pose.orientation));
+        offset-=turnTime(nodes[chain[0]].yaw-tf2::getYaw(measured.pose.orientation));
       }
       for(size_t i=closest;i<chain.size();++i) {
         auto n=nodes[chain[i]];
@@ -421,7 +435,7 @@ public:
       result.poses.push_back(pose);times<<","<<n.t;
     }
     auto end=goal;end.header=result.header;result.poses.push_back(end);
-    const auto & last=nodes[found];times<<","<<last.t+turn_time(goal_yaw-last.yaw)<<"]";
+    const auto & last=nodes[found];times<<","<<last.t+turnTime(goal_yaw-last.yaw)<<"]";
     if(dynamic && debug_pub_->is_activated()) {
       std_msgs::msg::String message;std::ostringstream json;
       json<<"{\"sim_start\":"<<now<<",\"dynamic\":true,\"goal\":["<<goal.pose.position.x<<","<<goal.pose.position.y

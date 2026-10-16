@@ -243,7 +243,7 @@ class SimpleNav2Navigator(Node):
         if track_distance(position, passage['track']) < 1.10:
             return
         if not crossing_conflicts([position, passage['exit']], [passage['track']],
-                self.scene_obstacle_samples, now, 0., .8, 3.5):
+                self.scene_obstacle_samples, now, 0., .8, self.crossing_acceleration):
             return
         self.crossing_retry += 1
         self.guard_canceling = True

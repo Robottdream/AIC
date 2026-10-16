@@ -1,5 +1,7 @@
 # AIC
 
+当前车体施力研究分支按用户要求设线速上限6 m/s、角速上限4 rad/s，线与角加减速度均10；前向限力1000 N、横向限力1000 N、偏航限矩1000 N·m。控制器、规划器、平滑器、任务预测、生成器与驱动限幅已同步，本档单轮五件区域与高度均合格，120.75墙钟/115.3仿真秒，无碰撞/失稳中止，实速峰值6.121 m/s；[记录与图](docs/speed6-body-force-20261016.md)。昨日8/4与20/5、20/10档结果见[记录](docs/acc20-force1000-flow-20261015.md)。
+
 ROS 2 Humble + Gazebo Classic 搬运仿真工程。当前默认使用 `scenarios/short_routes_20261007/` 中的新办公室地图、13 个橙色静态障碍和两条斜向移动障碍轨迹。
 
 ## 当前目录
@@ -47,9 +49,24 @@ bash ros_competition_start.sh benchmark --headless --use-running
 
 默认入口统一选择同一场景的 world、map、tasks、nav2 文件。通过 `AIC_SCENE` 选择场景；显式 `AIC_WORLD`、`AIC_MAP`、`AIC_TASK_CONFIG`、`AIC_NAV_PARAMS` 优先。
 
+复现当前配置的一轮无头五件流程并自动画图（输出目录每次新建）：
+
+```bash
+cd /home/polarbear/ws_aic
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+run_id=$(TZ=Asia/Shanghai date +%Y%m%d-%H%M%S)
+python3 tools/physics_benchmark/repeat_flow.py --repeats 1 \
+  --output "$HOME/.local/share/aic-runs/manual-$run_id" \
+  --windows-output "/mnt/c/Users/21920/Desktop/AIC-test-$run_id"
+```
+
+该工具要求没有正在运行的栈；每轮自动冷启动、核验实际参数/URDF、执行任务、停栈并输出桌面目录中的 `index.html`。当前参数和单轮验证边界见 [6/4 与全10、全1000记录](docs/speed6-body-force-20261016.md)。
 Foxglove 导入 `demo1.json`，普通主入口连接 `ws://localhost:9090`；USB 入口默认 `ws://localhost:8765`。不要同时启动两套栈。
 
 ## 当前参数与验证
+
+本研究分支 `codex/body-velocity-control` 默认使用[车体施力驱动](src/aic_body_drive/README.md)：真实速度反馈、有限水平力和偏航转矩、被动车轮，取代轮子电机驱动。`AIC_DRIVE_MODEL=wheel` 可在冷启动时选回旧驱动作对照，两个驱动互斥。导航目标6 m/s、角速4 rad/s，线与角加减速均10；前向/横向/偏航限额均1000，摩擦1、ODE200与1 ms保持。下面日期成绩保留为旧轮子驱动的历史结果；新方案验证见[车体施力记录](docs/body-force-drive-20261015.md)。 3/4/5 m/s各一轮完整五件及全部图表见[三档流程记录](docs/body-force-speed345-flow-20261015.md)；这些为历史隔离试验；当前配置见本文开头。
 
 2026-10-15后续本地试验：世界与生成器的`contact_max_correcting_vel`已改为**200**，正式导航目标仍为2.2 m/s。隔离空场测试2.5/3.0/3.5 m/s，每档直行和圆弧各重复两次。直行均达目标；3.0/3.5圆弧出现轮速已到位、车身偏航加剧与轨迹内卷，不能当作跟踪通过。详情见[三档速度、轮速换算与实测](docs/linear-speed-limits-20261015.md)。以下100档的五件成绩属于此前发布验证，200未跑完整五件。
 

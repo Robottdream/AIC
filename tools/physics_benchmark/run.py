@@ -25,10 +25,11 @@ def parse_args():
     parser.add_argument('--windows-output', type=Path, help='Copy final report/figures to a Windows-mounted directory such as /mnt/c/Users/.../Desktop/results')
     parser.add_argument('--ode-values', type=int, nargs='+', default=[100, 200])
     parser.add_argument('--pace-realtime', action=argparse.BooleanOptionalAction, default=True, help='Set update rate to 1/step to keep nominal real-time factor 1 across step sizes')
-    parser.add_argument('--suite', choices=['ode', 'numerical'], default='ode')
-    parser.add_argument('--variants', nargs='+', choices=['baseline', 'step-half', 'step-quarter', 'step-double', 'step-quadruple', 'world', 'finite'], default=['baseline', 'step-half', 'step-quarter', 'world', 'finite'])
+    parser.add_argument('--suite', choices=['ode', 'numerical', 'drive'], default='ode')
+    parser.add_argument('--variants', nargs='+', choices=['baseline', 'step-half', 'step-quarter', 'step-double', 'step-quadruple', 'world', 'finite', 'wheel', 'body_force'], default=None)
     parser.add_argument('--repeats', type=int, default=2, help='Cold starts per ODE value; alternate forward/reverse order')
     parser.add_argument('--speed', type=float, default=3.0)
+    parser.add_argument('--body-speed-limit',type=float,default=3.5,help='Body-force command clamp; use the same limit across a speed ladder')
     parser.add_argument('--omega', type=float, default=2.0)
     parser.add_argument('--hold', type=float, default=3.2)
     parser.add_argument('--brake', type=float, default=2.2)
@@ -46,14 +47,18 @@ def parse_args():
             parser.error('ODE values and repeats must be positive')
         if len(set(args.ode_values)) != len(args.ode_values):
             parser.error('Use --repeats rather than duplicate --ode-values')
-        if not all(math.isfinite(v) for v in [args.speed, args.omega, args.hold, args.brake, args.expected_torque, args.expected_mu]):
+        if not all(math.isfinite(v) for v in [args.speed, args.omega, args.hold, args.brake, args.expected_torque, args.expected_mu, args.body_speed_limit]):
             parser.error('Parameters must be finite')
-        if not (0 < args.speed <= 3.5 and abs(args.omega) <= 4):
-            parser.error('This field/probe supports 0 < speed <= 3.5 and |omega| <= 4')
+        if not (0 < args.speed <= 5.0 and abs(args.omega) <= 4):
+            parser.error('This field/probe supports 0 < speed <= 5.0 and |omega| <= 4')
         if not (max(args.speed / 3.5, abs(args.omega) / 10) + .6 <= args.hold <= 4):
             parser.error('Hold must leave 0.6 s after acceleration and be <= 4 s')
         if args.brake < 1.5 or args.expected_torque <= 0 or args.expected_mu <= 0:
             parser.error('Brake observation must be >=1.5 s; expected torque/mu must be positive')
+    if args.variants is None:
+        args.variants = ['wheel', 'body_force'] if args.suite == 'drive' else ['baseline', 'step-half', 'step-quarter', 'world', 'finite']
+    if args.suite == 'drive' and 'body_force' in args.variants and args.speed > args.body_speed_limit:
+        parser.error('Body speed limit must cover requested speed')
     args.output = args.output.expanduser().resolve()
     return args
 
@@ -62,7 +67,7 @@ def make_map(out, world):
     """Rasterize static boxes at the same coordinates as the empty-field fixture."""
     import yaml
     resolution = .05
-    width, height = 1400, 320
+    width, height = 1400, 480
     data = bytearray([254]) * (width * height)
     for model in world.findall('model'):
         if model.findtext('static', '').lower() not in ('true', '1'):
@@ -74,13 +79,13 @@ def make_map(out, world):
         dx, dy, _ = map(float, size.split())
         x0 = max(0, int(math.floor((x - dx / 2 + 35) / resolution)))
         x1 = min(width, int(math.ceil((x + dx / 2 + 35) / resolution)))
-        y0 = max(0, int(math.floor((y - dy / 2 + 8) / resolution)))
-        y1 = min(height, int(math.ceil((y + dy / 2 + 8) / resolution)))
+        y0 = max(0, int(math.floor((y - dy / 2 + 12) / resolution)))
+        y1 = min(height, int(math.ceil((y + dy / 2 + 12) / resolution)))
         for iy in range(y0, y1):
             offset = (height - 1 - iy) * width
             data[offset + x0:offset + x1] = bytes(x1 - x0)
     (out / 'map.pgm').write_bytes(f'P5\n{width} {height}\n255\n'.encode() + data)
-    (out / 'map.yaml').write_text(yaml.safe_dump(dict(image='map.pgm', resolution=resolution, origin=[-35., -8., 0.], negate=0, occupied_thresh=.65, free_thresh=.196)))
+    (out / 'map.yaml').write_text(yaml.safe_dump(dict(image='map.pgm', resolution=resolution, origin=[-35., -12., 0.], negate=0, occupied_thresh=.65, free_thresh=.196)))
 
 
 def prepare(args):
@@ -98,10 +103,16 @@ def prepare(args):
         'world': dict(ode=200, solver='world', step=.001, finite=False),
         'finite': dict(ode=200, solver='quick', step=.001, finite=True),
     }
-    values = args.variants if args.suite == 'numerical' else args.ode_values
+    if args.suite == 'drive':
+        if any(v not in ('wheel', 'body_force') for v in args.variants):
+            raise ValueError('Drive suite accepts only wheel/body_force variants')
+        definitions = {v: dict(ode=200, solver='quick', step=.001, finite=False, drive=v) for v in args.variants}
+    elif any(v in ('wheel', 'body_force') for v in args.variants):
+        raise ValueError('Drive variants require --suite drive')
+    values = args.variants if args.suite in ('numerical', 'drive') else args.ode_values
     if len(set(values)) != len(values):
         raise ValueError('Duplicate variants; use --repeats')
-    profiles = definitions if args.suite == 'numerical' else {str(v): dict(ode=v, solver='quick', step=.001, finite=False) for v in values}
+    profiles = definitions if args.suite in ('numerical', 'drive') else {str(v): dict(ode=v, solver='quick', step=.001, finite=False) for v in values}
     for config in profiles.values():
         config['update_rate'] = 1. / config['step'] if args.pace_realtime else 1000.
     order = []
@@ -109,18 +120,19 @@ def prepare(args):
         order.extend(values if repeat % 2 == 0 else reversed(values))
     protocol = dict(paced_realtime=args.pace_realtime, suite=args.suite, profiles=profiles, order=order, target_v=args.speed, target_w=args.omega,
                     hold_sim_seconds=args.hold, brake_observation_seconds=args.brake,
-                    expected_torque=args.expected_torque, expected_mu=args.expected_mu,
+                    expected_torque=args.expected_torque, expected_mu=args.expected_mu, body_speed_limit=args.body_speed_limit,
                     trials_per_boot=['straight', 'arc-w2'],
                     method='Counterbalanced cold starts; command through active velocity smoother; no Nav2 path action')
     (out / 'protocol.json').write_text(json.dumps(protocol, indent=2))
     nav = yaml.safe_load(args.nav_params.read_text())
     follow = nav['controller_server']['ros__parameters']['FollowPath']
     follow['desired_linear_vel'] = args.speed
+    follow.update(rotate_to_heading_angular_vel=4., max_angular_accel=10., linear_acceleration=3.5, linear_deceleration=5., max_angular_velocity=4., angular_deceleration=10.)
     smoother = nav['velocity_smoother']['ros__parameters']
     smoother['max_velocity'] = [args.speed, 0., 4.]
     smoother['max_accel'] = [3.5, 0., 10.]
     smoother['max_decel'] = [-5., 0., -10.]
-    nav['planner_server']['ros__parameters']['GridBased']['nominal_speed'] = args.speed
+    nav['planner_server']['ros__parameters']['GridBased'].update(nominal_speed=args.speed,linear_acceleration=3.5,linear_deceleration=5.,angular_acceleration=10.,max_angular_velocity=4.,angular_deceleration=10.)
     tasks = yaml.safe_load(args.tasks.read_text())
     # Motion commands bypass task navigation; task inputs are still archived for provenance.
     normalized = []
@@ -151,19 +163,19 @@ def prepare(args):
     if len(set(normalized)) != 1:
         raise RuntimeError('Worlds differ beyond intended suite parameters/output path')
     make_map(out, ET.parse(HERE / 'empty-field.world').find('world'))
-    sources = list(HERE.glob('*.py')) + [HERE / 'native_probe.cpp', HERE / 'empty-field.world', args.nav_params, args.tasks]
+    sources = list(HERE.glob('*.py')) + [HERE / 'native_probe.cpp', HERE / 'empty-field.world', args.nav_params, args.tasks, ROOT / 'src/yzbot/mybot_description/urdf/originbot_with_arm_gazebo.xacro'] + list((ROOT / 'src/aic_body_drive').rglob('*.cpp')) + list((ROOT / 'src/aic_body_drive').glob('CMakeLists.txt'))
     (out / 'input-provenance.json').write_text(json.dumps({str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}, indent=2))
     print(f'Prepared {len(order)} cold starts / {2 * len(order)} trials in {out}', flush=True)
     return order
 
 
 def boot_name(index, key, suite):
-    return f'boot-{index}-{key}' if suite == 'numerical' else f'boot-{index}-ode-{key}'
+    return f'boot-{index}-{key}' if suite in ('numerical', 'drive') else f'boot-{index}-ode-{key}'
 
 
 def analyze(args):
     protocol = json.loads((args.output / 'protocol.json').read_text())
-    script = 'analyze_numerical.py' if protocol.get('suite') == 'numerical' else 'analyze.py'
+    script = 'analyze_numerical.py' if protocol.get('suite') in ('numerical', 'drive') else 'analyze.py'
     subprocess.run([sys.executable, str(HERE / script), '--output', str(args.output)], check=True)
     if args.windows_output:
         export_results(args)
@@ -241,6 +253,9 @@ def run_trials(args, order):
         for i, key in enumerate(order, 1):
             config = profiles[str(key)]
             limit = config['ode']
+            env['AIC_DRIVE_MODEL'] = config.get('drive', 'wheel')
+            env['AIC_BODY_MAX_LINEAR_SPEED'] = str(args.body_speed_limit)
+            env['AIC_BODY_MAX_ANGULAR_SPEED'] = '4.0'
             name = boot_name(i, key, args.suite)
             folder = args.output / name
             env.update(AIC_WORLD=str(folder / 'field.world'), AIC_NAV_PARAMS=str(folder / 'nav2.yaml'), AIC_TASK_CONFIG=str(folder / 'tasks.yaml'))
@@ -270,7 +285,7 @@ def run_trials(args, order):
                     raise RuntimeError(f'Runtime physics mismatch: {actual}')
                 print(f'RUNTIME {actual}', flush=True)
                 with (args.output / (name + '-probe.log')).open('w') as log:
-                    subprocess.run([sys.executable, str(HERE / 'probe.py'), '--folder', str(folder), '--speed', str(args.speed), '--omega', str(args.omega), '--hold', str(args.hold), '--brake', str(args.brake), '--expected-torque', str(args.expected_torque), '--expected-mu', str(args.expected_mu)], env=env, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=180, check=True)
+                    subprocess.run([sys.executable, str(HERE / 'probe.py'), '--folder', str(folder), '--speed', str(args.speed), '--omega', str(args.omega), '--hold', str(args.hold), '--brake', str(args.brake), '--expected-torque', str(args.expected_torque), '--expected-mu', str(args.expected_mu), '--expected-drive', config.get('drive', 'wheel'), '--expected-body-speed-limit', str(args.body_speed_limit)], env=env, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, timeout=180, check=True)
                 (folder / 'runner-status.json').write_text(json.dumps(dict(status='completed'), indent=2))
             except Exception as exc:
                 (folder / 'runner-error.json').write_text(json.dumps(dict(error=repr(exc)), indent=2))
@@ -315,6 +330,7 @@ def main():
             args.hold, args.brake = protocol['hold_sim_seconds'], protocol['brake_observation_seconds']
             args.expected_torque = protocol.get('expected_torque', 1000.)
             args.expected_mu = protocol.get('expected_mu', 1.)
+            args.body_speed_limit = protocol.get('body_speed_limit', 3.5)
             order = protocol['order']
             pending = False
             for i, key in enumerate(order, 1):

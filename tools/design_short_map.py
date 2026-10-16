@@ -226,7 +226,7 @@ def main():
     config = {
         'main_controller_node': {'ros__parameters': dict(red_block_positions=flatten(RED),
             blue_block_positions=flatten(BLUE), area_parking_positions=flatten(parking), stable_layout_hints=False)},
-        'simple_nav2_navigator': {'ros__parameters': dict(area_parking_positions=flatten(parking), crossing_max_wait=12.0, slow_near_static_obstacles=False,
+        'simple_nav2_navigator': {'ros__parameters': dict(area_parking_positions=flatten(parking), crossing_max_wait=12.0, crossing_cruise_speed=6.0, crossing_acceleration=10.0, slow_near_static_obstacles=False,
             obstacle_names=[o['name'] for o in OBSTACLES],
             obstacle_tracks=flatten([p for o in OBSTACLES for p in (o['start'], o['end'])]),
             obstacle_sizes=[o['size'] for o in OBSTACLES], obstacle_speeds=[o['speed'] for o in OBSTACLES])},
@@ -235,14 +235,15 @@ def main():
     # This map has a diagonal crossing; leave the stable map's Nav2 file intact.
     navigation = yaml.safe_load((ROOT/'src/yzbot/bot_navigation/param/originbot_nav2.yaml').read_text())
     follow = navigation['controller_server']['ros__parameters']['FollowPath']
-    follow.update(max_lookahead_dist=1.5, cost_scaling_dist=0.9,
+    follow.update(desired_linear_vel=6.0, linear_acceleration=10.0, linear_deceleration=10.0, max_angular_velocity=4.0, angular_deceleration=10.0, max_lookahead_dist=1.5, cost_scaling_dist=0.9,
                   max_allowed_time_to_collision_up_to_carrot=2.0,
                   rotate_to_heading_angular_vel=4.0, max_angular_accel=10.0)
     smoother = navigation['velocity_smoother']['ros__parameters']
+    smoother['max_velocity'][0] = 6.0
     smoother['max_velocity'][2] = 4.0
     smoother['min_velocity'][2] = -4.0
-    smoother['max_accel'][2] = 10.0
-    smoother['max_decel'][2] = -10.0
+    smoother['max_accel'] = [10.0, 0.0, 10.0]
+    smoother['max_decel'] = [-10.0, 0.0, -10.0]
     for name, frequency in [('local_costmap', 20.0), ('global_costmap', 5.0)]:
         params = navigation[name][name]['ros__parameters']
         params['update_frequency'] = frequency
@@ -250,7 +251,7 @@ def main():
         params['inflation_layer']['inflation_radius'] = 1.0
 
     navigation['planner_server']['ros__parameters']['GridBased'] = dict(
-        plugin='aic_timed_planner/TimeAwarePlanner', nominal_speed=2.2, max_planning_time=1.5, slow_near_static_obstacles=False, preferred_static_clearance=.85, wall_clearance_weight=3., dynamic_clearance_weight=4.,
+        plugin='aic_timed_planner/TimeAwarePlanner', nominal_speed=6.0, linear_acceleration=10.0, linear_deceleration=10.0, max_angular_velocity=4.0, angular_deceleration=10.0, angular_acceleration=10.0, max_planning_time=1.5, slow_near_static_obstacles=False, preferred_static_clearance=.85, wall_clearance_weight=3., dynamic_clearance_weight=4.,
         obstacle_names=[o['name'] for o in OBSTACLES],
         obstacle_tracks=[v for o in OBSTACLES for p in (o['start'],o['end']) for v in p],
         obstacle_sizes=[o['size'] for o in OBSTACLES], obstacle_speeds=[o['speed'] for o in OBSTACLES])

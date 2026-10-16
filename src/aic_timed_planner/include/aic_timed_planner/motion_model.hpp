@@ -25,9 +25,26 @@ struct FrameAlignment {
   }
 };
 struct KinematicState {double x,y,yaw,v,w;};
-inline void advance(KinematicState & state,double target_v,double target_w,double dt) {
-  state.v+=std::clamp(target_v-state.v,-5.*dt,3.5*dt);
-  state.w+=std::clamp(target_w-state.w,-10.*dt,10.*dt);
+struct MotionLimits {
+  double linear_accel=3.5,linear_decel=5.,angular_accel=10.,max_angular_velocity=4.,angular_decel=10.;
+  bool valid() const {
+    return std::isfinite(linear_accel) && linear_accel>0 &&
+      std::isfinite(linear_decel) && linear_decel>0 &&
+      std::isfinite(angular_accel) && angular_accel>0 &&
+      std::isfinite(max_angular_velocity) && max_angular_velocity>0 &&
+      std::isfinite(angular_decel) && angular_decel>0;
+  }
+};
+inline void advance(KinematicState & state,double target_v,double target_w,double dt,const MotionLimits & limits=MotionLimits{}) {
+  state.v+=std::clamp(target_v-state.v,-limits.linear_decel*dt,limits.linear_accel*dt);
+  const bool reversing=state.w*target_w<0;
+  if(reversing && std::abs(state.w)<limits.angular_decel*dt) {
+    const double remaining=dt-std::abs(state.w)/limits.angular_decel;
+    state.w=std::copysign(std::min(std::abs(target_w),limits.angular_accel*remaining),target_w);
+  } else {
+    const double rate=(reversing || std::abs(target_w)<std::abs(state.w)) ? limits.angular_decel : limits.angular_accel;
+    state.w+=std::clamp(target_w-state.w,-rate*dt,rate*dt);
+  }
   const double middle=state.yaw+state.w*dt/2.;
   state.x+=state.v*std::cos(middle)*dt;state.y+=state.v*std::sin(middle)*dt;
   state.yaw=wrap(state.yaw+state.w*dt);
@@ -73,9 +90,11 @@ inline double future_occupancy_risk(double x,double y,double yaw,double hx,doubl
   }
   return risk;
 }
-inline double turn_time(double radians)
+inline double turn_time(double radians,double max_w=4.,double accel=10.,double decel=-1.)
 {
   const double a=std::abs(wrap(radians));
-  return a<=1.6 ? 2*std::sqrt(a/10.) : a/4.+.4;
+  if(decel<0) decel=accel;  // Preserve the symmetric legacy overload.
+  const double inverse_rates=1./accel+1./decel;
+  return a<=.5*max_w*max_w*inverse_rates ? std::sqrt(2.*a*inverse_rates) : a/max_w+.5*max_w*inverse_rates;
 }
 }  // namespace aic_timed_planner

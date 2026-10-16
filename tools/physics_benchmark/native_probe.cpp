@@ -100,6 +100,8 @@ class ContactLimitProbe : public WorldPlugin {
       log_ << ",\"right_max_angular_speed\":"; Number(dBodyGetMaxAngularSpeed(rid));
       log_ << ",\"left_velocity_limit\":"; Number(lj->GetVelocityLimit(0));
       log_ << ",\"right_velocity_limit\":"; Number(rj->GetVelocityLimit(0));
+      log_ << ",\"left_motor_fmax\":"; Number(boost::any_cast<double>(lj->GetParam("fmax", 0)));
+      log_ << ",\"right_motor_fmax\":"; Number(boost::any_cast<double>(rj->GetParam("fmax", 0)));
       log_ << ",\"left_effort_limit\":"; Number(lj->GetEffortLimit(0));
       log_ << "}\n";
       log_.flush();

@@ -22,3 +22,36 @@ TEST(MotionModel, FastTurnTimingUsesAccelerationAndSpeed) {
   EXPECT_NEAR(turn_time(PI),PI/4+.4,1e-9);
   EXPECT_NEAR(turn_time(.4),.4,1e-9);
 }
+
+TEST(MotionModel, ConfiguredHighAccelerationAndBraking) {
+  const MotionLimits limits{15.,15.,15.,8.,15.};
+  KinematicState state{0,0,0,0,0};
+  advance(state,8.,8.,.05,limits);
+  EXPECT_NEAR(state.v,.75,1e-9);EXPECT_NEAR(state.w,.75,1e-9);
+  state.v=8.;state.w=8.;advance(state,0.,0.,.05,limits);
+  EXPECT_NEAR(state.v,7.25,1e-9);EXPECT_NEAR(state.w,7.25,1e-9);
+}
+TEST(MotionModel, ConfiguredTurnTimingTriangularAndTrapezoidal) {
+  EXPECT_NEAR(turn_time(PI,8.,15.),2.*std::sqrt(PI/15.),1e-9);
+  EXPECT_NEAR(turn_time(PI,2.,15.),PI/2.+2./15.,1e-9);
+  EXPECT_LT(turn_time(PI,8.,15.),turn_time(PI));
+}
+TEST(MotionModel, RejectsInvalidPredictionLimits) {
+  EXPECT_TRUE((MotionLimits{15.,15.,15.,8.,15.}.valid()));
+  EXPECT_FALSE((MotionLimits{15.,0.,15.,8.,15.}.valid()));
+  EXPECT_FALSE((MotionLimits{15.,15.,15.,-8.,15.}.valid()));
+}
+
+TEST(MotionModel, IndependentAngularAccelerationAndBraking) {
+  const MotionLimits limits{15.,15.,40.,20.,15.};
+  KinematicState state{0,0,0,0,0};advance(state,0,20.,.05,limits);
+  EXPECT_NEAR(state.w,2.,1e-9);
+  state.w=8.;advance(state,0,0,.05,limits);EXPECT_NEAR(state.w,7.25,1e-9);
+  state.w=-8.;advance(state,0,0,.05,limits);EXPECT_NEAR(state.w,-7.25,1e-9);
+  state.w=.3;advance(state,0,-20.,.05,limits);EXPECT_NEAR(state.w,-1.2,1e-9);
+}
+TEST(MotionModel, AsymmetricTurnTiming) {
+  EXPECT_NEAR(turn_time(PI,20.,40.,15.),std::sqrt(2.*PI*(1./40.+1./15.)),1e-9);
+  EXPECT_NEAR(turn_time(PI,2.,40.,15.),PI/2.+1./40.+1./15.,1e-9);
+  EXPECT_GT(turn_time(PI,20.,40.,15.),turn_time(PI,20.,40.,40.));
+}

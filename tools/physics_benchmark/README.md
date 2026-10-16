@@ -116,3 +116,71 @@ python3 tools/physics_benchmark/run.py \
 只读GetParameters查询失败时最多重试3次，每次等待服务和响应各最多10秒，记录parameter-query-retries.json；状态修改请求保持单次执行。没有读到实际参数的组不发运动指令，不计为物理失败。
 
 若某组在终态记录写入前被中断，--resume会先将该组已有观测数据移入interrupted-attempts子目录，再重跑该组；配置文件保持，部分日志不会被新采样覆盖。
+
+## 轮子电机与车体施力对照
+
+```bash
+python3 tools/physics_benchmark/run.py \
+  --suite drive --variants wheel body_force --repeats 2 --speed 3.0 --omega 2.0 \
+  --output "$HOME/.local/share/aic-runs/body-force-$(date +%Y%m%d-%H%M%S)" \
+  --windows-output /mnt/c/Users/21920/Desktop/AIC-body-force
+```
+
+先构建 aic_body_drive 与 mybot_description。四次冷启动顺序 wheel→body_force→body_force→wheel，各执行直行和圆弧，物理节奏1 ms/1000 Hz、ODE200保持；每次通过 AIC_DRIVE_MODEL 明确选择一种驱动。旧 ODE/数值套件也明确选择 wheel，避免本分支默认驱动改变旧协议含义。
+
+机器人除驱动插件外的 XML 必须一致；同类驱动模型哈希必须一致。原生 left/right_motor_fmax 核验旧电机上限1000、新方案0；不把“车轮达到指令值”作为新方案通过条件。新方案轮子被动滚动，转速只作观测；力/矩在 /body_drive/wrench 采样。正式 μ=1 保持。
+
+body_force 每次另执行原地转向、倒车、断指令制动检查，结果保存在 servo-checks.json。断指令检查先停用平滑器，再停止直接发布，验证驱动自身0.5仿真秒看门狗确实制动。该检查不计入八项直行/圆弧指标，观察时长也不计入圆弧曲线。
+
+图中的灰色参考为本次实际平滑后指令的理想积分，包含ROS接收时刻偏差，并非Nav2规划路径。新旧不同驱动的启动前静止时间可能不同；轨迹从各动作起点对齐。后段速度接近目标和完整流程通过分别判断。
+
+完整搬运实际速度路径可从标准结果重画（必须有同场景layout.json）：
+
+```bash
+python3 tools/plot_delivery_motion.py --run-dir /path/to/benchmark-result \
+  --output /mnt/c/Users/21920/Desktop/delivery-speed-route.png --drive-label 车体施力驱动
+```
+
+此图使用世界静态几何，未显示移动障碍历史，也不混入未校准的全局路径。--drive-label仅是调用者提供的标签，不从旧日志猜测驱动类型。
+
+## 3/4/5 m/s完整五件流程
+
+WSL bash，先确保上一套栈已经停止：
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/polarbear/ws_aic/install/setup.bash
+python3 tools/physics_benchmark/speed_ladder.py --flows-only \
+  --output "$HOME/.local/share/aic-runs/flow-speed345-$(date +%Y%m%d-%H%M%S)" \
+  --windows-output /mnt/c/Users/21920/Desktop/AIC-flow-speed345
+python3 tools/physics_benchmark/analyze_flow_ladder.py \
+  --output /absolute/path/to/the/same/output \
+  --windows-output /mnt/c/Users/21920/Desktop/AIC-flow-speed345
+```
+
+固定3→4→5 m/s各一轮五件，先核验实际参数再发令。隔离副本同步巡航、规划nominal_speed、平滑器上限、simple_nav2_navigator.crossing_cruise_speed；通过AIC_BODY_MAX_LINEAR_SPEED将驱动指令限幅统一5 m/s。脚本不修改源场景文件；当前正常默认线/角速度为6/4，线与角加减速均10；本历史3/4/5协议会显式覆盖回其原角速度4、加减速3.5/5/10及相应预测参数，不跟随默认档位漂移。质量/μ1/ODE200/1ms和力/矩、加减速、转弯与预测保护保持。
+
+每轮保存世界与配置、实际机器人URDF和运行参数、原生100 Hz位姿/左右轮速、标准benchmark阶段/命令/落点、注入力和路径记录。record_navigation.py按路径消息时间查询TF，将map/base_link等路径变换到物理odom/world；转换失败保留原因，不将未转换点直接叠加。优先绘制控制器收到路径，其次全局计划；路径版本采样最多5 Hz，图中每导航阶段最多展示4个版本。
+
+输出包括三档同色标实际轨迹、各档十段预期/实际图、速度/角速度响应、被动轮速/倾角/相对高度、注入力/矩、阶段耗时和CSV/JSON报告。主计时采用任务阶段事件，不含冷启动或自然语言解析；原始采集轮询时间另存。每档单轮，动态障碍相位和重规划路线可能不同，结果不能证明长期成功率。
+
+预检使用与子进程同一Fast DDS配置；预检ROS上下文不安装自己的信号处理器，保留运行器中止行为。指定输出必须不存在，失败或中断记录保留；脚本未提供覆盖或自动删除旧数据。
+
+短测工具现在支持最高5 m/s（需--body-speed-limit 5），隔离场地横向边界扩展到±12 m，保护线±11 m。既有数值试验保持原始世界快照，旧记录不被新夹具覆盖。
+
+## 当前配置重复完整流程
+
+```bash
+python3 tools/physics_benchmark/repeat_flow.py --repeats 2 \
+  --output "$HOME/.local/share/aic-runs/current-twoflows-$(date +%Y%m%d-%H%M%S)" \
+  --windows-output /mnt/c/Users/21920/Desktop/AIC-current-twoflows
+```
+
+此入口保持当前场景配置（当前6 m/s、4 rad/s、线/角加减速10、前向/横向/偏航限额均1000），不调用历史3/4/5协议的旧限幅覆盖。每轮冷启动、读回所有速度/加减速/预测参数和实际URDF，保存原生采样、计划与TF、施力、阶段及落点，结束后停栈。两轮之间不调参，不把失败尝试自动补成成功记录。输出必须是新目录。
+
+新入口在最后自动调用analyze_repeats.py，生成重复对比轨迹、速度/角速度、轮速/倾角/高度、平滑微分得到的速度变化率、施力、阶段耗时、各轮预期/实际路径及Windows index.html。也可单独用该分析脚本对已有输出重画。计时区分完成事件时间与原始轮询/中止尝试耗时；失败不计入完成均值。
+
+
+## 既有流程转向受力诊断
+
+`python3 tools/physics_benchmark/diagnose_turning.py --trial <trial目录> --output <输出目录>`只读取repeat_flow既有日志，输出横向速度、施力与偏航矩片段图及JSON。包含world施力到车头坐标的转换、近限幅样本比例与质量估算；向心力m*v*omega参考不包含接触反力。不会启动仿真或更改参数。2026-10-15分析见`../../docs/turning-force-diagnosis-20261015.md`，旧20/40日志不能作为已恢复4/10/10配置的验证。

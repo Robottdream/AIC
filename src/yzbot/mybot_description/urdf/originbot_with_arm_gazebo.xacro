@@ -134,6 +134,9 @@
     <xacro:wheel_transmission prefix="left" />
     <xacro:wheel_transmission prefix="right" />
 
+    <!-- Select one actuator only; default on the research branch is body force. -->
+    <xacro:property name="drive_model" value="$(optenv AIC_DRIVE_MODEL body_force)" />
+    <xacro:if value="${dict(wheel=True, body_force=False)[drive_model]}">
     <gazebo>
         <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
             <update_rate>30</update_rate>
@@ -161,4 +164,21 @@
             <robot_base_frame>base_footprint</robot_base_frame>
         </plugin>
     </gazebo>
+    </xacro:if>
+    <xacro:if value="${dict(wheel=False, body_force=True)[drive_model]}">
+      <gazebo>
+        <plugin name="body_force_controller" filename="libaic_body_drive.so">
+          <body_link>base_footprint</body_link>
+          <publish_rate>30</publish_rate>
+          <command_timeout>0.5</command_timeout>
+          <max_linear_speed>$(optenv AIC_BODY_MAX_LINEAR_SPEED 6.0)</max_linear_speed>
+          <max_angular_speed>$(optenv AIC_BODY_MAX_ANGULAR_SPEED 4.0)</max_angular_speed>
+          <forward_kp>300</forward_kp><forward_ki>150</forward_ki><forward_limit>1000</forward_limit>
+          <lateral_kp>1000</lateral_kp><lateral_ki>300</lateral_ki><lateral_limit>1000</lateral_limit>
+          <yaw_kp>200</yaw_kp><yaw_ki>100</yaw_ki><yaw_limit>1000</yaw_limit>
+          <odometry_frame>odom</odometry_frame>
+          <robot_base_frame>base_footprint</robot_base_frame>
+        </plugin>
+      </gazebo>
+    </xacro:if>
 </robot>
