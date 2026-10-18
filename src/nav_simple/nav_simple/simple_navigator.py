@@ -6,7 +6,8 @@ from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy, Du
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Bool
 from nav2_msgs.action import NavigateToPose, ComputePathToPose
-from geometry_msgs.msg import Pose, PoseStamped, Quaternion
+from geometry_msgs.msg import Pose, PoseStamped, Quaternion, PoseWithCovarianceStamped, Twist
+from std_srvs.srv import Empty
 from nav_msgs.msg import OccupancyGrid
 from gazebo_msgs.msg import ModelStates
 from rcl_interfaces.srv import SetParametersAtomically
@@ -102,6 +103,14 @@ class SimpleNav2Navigator(Node):
         self.scene_obstacle_samples = {}
         self.static_map = None
         self.world_pose = None
+        self.world_motion = None
+        self.localization_pose = None
+        self.navigation_retries = 0
+        self.recovery_context = None
+        self.nomotion_client = self.create_client(Empty, '/request_nomotion_update')
+        self.stop_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose',
+                                 self._localization_callback, qos_profile_sensor_data)
         self.safe_route = []
         self.route_stage = None
         self.routed_tracks = set()
@@ -141,8 +150,133 @@ class SimpleNav2Navigator(Node):
 
     def _world_callback(self, msg):
         if 'six_arm' in msg.name:
-            p = msg.pose[msg.name.index('six_arm')].position
-            self.world_pose = (self.get_clock().now().nanoseconds*1e-9, p.x, p.y)
+            index = msg.name.index('six_arm')
+            pose = msg.pose[index]
+            p, q = pose.position, pose.orientation
+            now = self.get_clock().now().nanoseconds*1e-9
+            self.world_pose = (now, p.x, p.y)
+            if index < len(msg.twist):
+                twist = msg.twist[index]
+                yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+                self.world_motion = (now, yaw, math.hypot(twist.linear.x, twist.linear.y),
+                                     abs(twist.angular.z))
+
+    def _localization_callback(self, msg):
+        p, q = msg.pose.pose.position, msg.pose.pose.orientation
+        stamp = msg.header.stamp.sec+msg.header.stamp.nanosec*1e-9
+        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+        self.localization_pose = (stamp, p.x, p.y, yaw)
+
+    def _recover_navigation(self, request_id, reason):
+        # FollowPath has already terminated. Refresh AMCL using new scans while
+        # stopped; never inject simulator coordinates or relax collision checks.
+        if (request_id != self.request_id or self.emergency_stop_active
+                or self.goal_pose is None or self.navigation_retries >= 2):
+            return False
+        self.navigation_retries += 1
+        self._cancel_pending_start()
+        self.recovery_context = dict(request_id=request_id, deadline=time.monotonic()+10.,
+                                     last_update=-math.inf, future=None, reason=reason,
+                                     began=self.get_clock().now().nanoseconds*1e-9,
+                                     plan_pending=False, plan_handle=None,
+                                     plan_good_until=-math.inf, next_plan=time.monotonic())
+        self.stop_pub.publish(Twist())
+        self.get_logger().warn(f'导航恢复 {self.navigation_retries}/2：{reason}；停车刷新定位后重规划')
+        self.pending_start_timer = self.create_timer(.1, self._navigation_recovery_tick)
+        return True
+
+    def _navigation_recovery_tick(self):
+        context = self.recovery_context
+        if context is None:
+            return
+        if context['request_id'] != self.request_id or self.emergency_stop_active:
+            self._cancel_pending_start()
+            return
+        self.stop_pub.publish(Twist())
+        now = self.get_clock().now().nanoseconds*1e-9
+        wall = time.monotonic()
+        if wall >= context['deadline']:
+            self._cancel_pending_start()
+            self.get_logger().error('导航恢复超时：未取得新鲜定位和可执行的当前路线')
+            self.status_pub.publish(String(data='failed: localization_recovery_timeout'))
+            return
+        measured, motion, localized = self.world_pose, self.world_motion, self.localization_pose
+        ready = False
+        if measured is not None and motion is not None and localized is not None:
+            heading_error = math.atan2(math.sin(localized[3]-motion[1]),
+                                       math.cos(localized[3]-motion[1]))
+            ready = (all(math.isfinite(v) for v in (*measured, *motion, *localized))
+                     and 0 <= now-measured[0] <= .25 and 0 <= now-motion[0] <= .25
+                     and -.1 <= now-localized[0] <= .5
+                     and localized[0] > context['began']
+                     and motion[2] < .05 and motion[3] < .1
+                     and math.hypot(localized[1]-measured[1], localized[2]-measured[2]) < .3
+                     and abs(heading_error) < .25)
+        if ready and wall <= context['plan_good_until']:
+            request_id = context['request_id']
+            self._cancel_pending_start()
+            goal = NavigateToPose.Goal()
+            goal.pose = self.goal_pose
+            goal.pose.header.stamp = self.get_clock().now().to_msg()
+            self.get_logger().info('停车后定位及当前路线核验通过，重新导航当前目标')
+            self._start_navigation(goal, request_id)
+            return
+        if ready and not context['plan_pending'] and wall >= context['next_plan']:
+            # Localization may recover while the moving actor still blocks all
+            # routes. Do not consume another navigation attempt in that phase.
+            goal = ComputePathToPose.Goal()
+            goal.goal = self.goal_pose
+            goal.goal.header.stamp = self.get_clock().now().to_msg()
+            goal.use_start = False
+            context['plan_pending'] = True
+            future = self.plan_client.send_goal_async(goal)
+            future.add_done_callback(lambda f: self._recovery_plan_response(f, context))
+        if (wall-context['last_update'] >= 1. and self.nomotion_client.service_is_ready()
+                and (context['future'] is None or context['future'].done())):
+            context['last_update'] = wall
+            context['future'] = self.nomotion_client.call_async(Empty.Request())
+
+    def _recovery_plan_response(self, future, context):
+        try:
+            handle = future.result()
+            if context is not self.recovery_context:
+                if handle.accepted:
+                    handle.cancel_goal_async()
+                return
+            if not handle.accepted:
+                context['plan_pending'] = False
+                context['next_plan'] = time.monotonic()+.75
+                return
+            context['plan_handle'] = handle
+            handle.get_result_async().add_done_callback(
+                lambda f: self._recovery_plan_result(f, context))
+        except Exception as error:
+            if context is self.recovery_context:
+                context['plan_pending'] = False
+                context['next_plan'] = time.monotonic()+.75
+                self.get_logger().warn(f'恢复路线查询失败，将有限重试：{error}')
+
+    def _recovery_plan_result(self, future, context):
+        if context is not self.recovery_context:
+            return
+        context['plan_pending'] = False
+        context['plan_handle'] = None
+        context['next_plan'] = time.monotonic()+.75
+        try:
+            result = future.result()
+            path = result.result.path
+            valid = (result.status == GoalStatus.STATUS_SUCCEEDED and bool(path.poses)
+                     and path.header.frame_id == 'map')
+            if valid:
+                end = path.poses[-1].pose.position
+                target = self.goal_pose.pose.position
+                valid = math.hypot(end.x-target.x, end.y-target.y) < .05
+            if valid:
+                context['plan_good_until'] = time.monotonic()+.5
+            else:
+                self.get_logger().warn('定位已恢复，当前路线暂不可用；保持停车并有限重查')
+        except Exception as error:
+            self.get_logger().warn(f'恢复路线结果无效，将有限重试：{error}')
 
     def _update_controller_profile(self, ready=None):
         now = self.get_clock().now().nanoseconds*1e-9
@@ -275,6 +409,10 @@ class SimpleNav2Navigator(Node):
         self.obstacle_samples.append((now, msg.position.y))
 
     def _cancel_pending_start(self):
+        context = self.recovery_context
+        if context is not None and context.get('plan_handle') is not None:
+            context['plan_handle'].cancel_goal_async()
+        self.recovery_context = None
         if self.pending_start_timer is not None:
             self.pending_start_timer.cancel()
             self.destroy_timer(self.pending_start_timer)
@@ -452,6 +590,7 @@ class SimpleNav2Navigator(Node):
             self.route_stage = None
             self.routed_tracks = set()
             self.crossing_retry = 0
+            self.navigation_retries = 0
             self.guard_canceling = False
             # 取消当前导航（如果有）
             if self.current_goal_handle:
@@ -632,12 +771,16 @@ class SimpleNav2Navigator(Node):
                 now = self.get_clock().now().nanoseconds*1e-9
                 if measured is None or now-measured[0] > .5 or self.goal_pose is None:
                     self.get_logger().error('到达核验失败：没有新鲜的仿真底盘位置')
+                    if self._recover_navigation(request_id, 'arrival_pose_unavailable'):
+                        return
                     self.status_pub.publish(String(data='failed: arrival_pose_unavailable'))
                     return
                 target = self.goal_pose.pose.position
                 arrival_error = math.hypot(measured[1]-target.x, measured[2]-target.y)
                 if arrival_error > .35:
                     self.get_logger().error(f'拒绝到达误报：底盘距任务目标仍有{arrival_error:.2f}m')
+                    if self._recover_navigation(request_id, 'arrival_position_mismatch'):
+                        return
                     self.status_pub.publish(String(data='failed: arrival_position_mismatch'))
                     return
                 if self.near_goal_started is not None:
@@ -647,6 +790,8 @@ class SimpleNav2Navigator(Node):
                 self.status_pub.publish(String(data="succeeded"))
             elif status == GoalStatus.STATUS_ABORTED:
                 self.get_logger().error("导航失败：路径规划失败/避障中断")
+                if self._recover_navigation(request_id, 'aborted'):
+                    return
                 self.status_pub.publish(String(data="failed: aborted"))
             elif status == GoalStatus.STATUS_CANCELED:
                 self.get_logger().warn("导航已被取消")

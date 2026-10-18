@@ -26,9 +26,51 @@ BOOKS = ('每个书箱有5本书籍，有故事书、科普书两种书箱。'
          '小豪想要5本科普书；小智想要1本故事书，5本科普书。'
          '设故事书箱数为x，科普书箱数为y，计算x、y。')
 INVENTORY = dict(red=5, blue=5)
+GIFTS = ('每个礼品盒有5个糖果;有软糖、硬糖两种礼品盒。'
+         '小红想要1个软糖;小刚想要1个硬糖,10个软糖;小明说和小红一样;'
+         '小兰要1个硬糖;小玉也和小红一样但是换成硬糖;小华想要5个软糖，1个硬糖。'
+         '设软糖礼盒数量为x,硬糖礼盒数量为y,计算x、y。')
+GIFT_RULE = 'x代表红色,y代表蓝色;数值大于等于3的去A区,其他颜色去C区'
 
 
 class RulesTests(unittest.TestCase):
+    def test_gift_boxes_with_full_written_mapping(self):
+        problem, rule = parse_input(GIFTS + ' ' + GIFT_RULE)
+        self.assertEqual((problem, rule), (GIFTS, 1))
+        result = solve_container_problem(problem)
+        self.assertEqual(result['definitions'], {'x': '软糖', 'y': '硬糖'})
+        self.assertEqual(result['totals'], {'软糖': 17, '硬糖': 4})
+        self.assertEqual(result['answers'], {'x': 4, 'y': 1})
+        self.assertEqual(CompetitionSession().prepare(problem, rule, INVENTORY)['tasks'],
+                         [dict(color='red', num=4, to='A'), dict(color='blue', num=1, to='C')])
+
+    def test_declared_items_are_not_a_fixed_vocabulary(self):
+        changed = GIFTS.replace('软糖', '巧克力').replace('硬糖', '饼干').replace('个', '颗')
+        # Capacity still uses the container counter 个; contents use 颗.
+        changed = changed.replace('每颗礼品盒', '每个礼品盒')
+        self.assertEqual(solve_container_problem(changed)['totals'], {'巧克力': 17, '饼干': 4})
+        changed = GIFTS.replace('10个软糖', '2个软糖')
+        self.assertEqual(solve_container_problem(changed)['answers'], {'x': 2, 'y': 1})
+        for bad in (GIFTS.replace('10个软糖', '10个水果'),
+                    GIFTS.replace('10个软糖', '-1个软糖'),
+                    GIFTS.replace('10个软糖', '0.5个软糖'),
+                    GIFTS.replace('小兰要', '小红要')):
+            with self.subTest(problem=bad), self.assertRaises(ValueError):
+                solve_container_problem(bad)
+
+    def test_full_mapping_rules_and_conflicts(self):
+        from llama_command_parser.competition_rules import RULES
+        for rule, written in RULES.items():
+            for prefix in ('', '映射规则：'):
+                self.assertEqual(parse_input(GIFTS + '\n' + prefix + written), (GIFTS, rule))
+        self.assertEqual(parse_input(GIFTS + '\n映射规则：2。'), (GIFTS, 2))
+        for written in (GIFT_RULE.replace('A区', 'B区'), GIFT_RULE + '，红色到B区',
+                        '映射规则：4'):
+            with self.subTest(mapping=written), self.assertRaises(ValueError):
+                parse_input(GIFTS + written)
+        with self.assertRaises(ValueError):
+            parse_input(json.dumps(dict(problem=GIFTS + GIFT_RULE, rule=2)))
+
     def test_official_wardrobe(self):
         result = solve_container_problem(WARDROBE)
         self.assertEqual(result['totals'], {'T恤': 17, '裤子': 4})
@@ -138,6 +180,15 @@ def parser_callbacks():
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_gift_preview_remains_confirmation_only(self):
+        node = parser_callbacks()
+        node.problem_callback(NS(data=GIFTS + '\n' + GIFT_RULE))
+        self.assertEqual(node.chat_pub.messages, [])
+        preview = json.loads(node.preview_pub.messages[-1])
+        self.assertEqual(preview['solution']['answers'], {'x': 4, 'y': 1})
+        self.assertEqual(preview['rule'], 1)
+        self.assertEqual(preview['state'], 'awaiting_confirmation')
+
     def test_prepare_never_sends_task_and_confirmation_sends_once(self):
         node = parser_callbacks()
         node.problem_callback(NS(data=WARDROBE))

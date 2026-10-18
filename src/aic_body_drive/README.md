@@ -1,5 +1,9 @@
 # 车体施力驱动（Gazebo Classic）
 
+2026-10-17：新增联合转弯约束 `max_lateral_acceleration=3.0`。先保持请求曲率缩放线/角目标，再按实测前向速度限制转向，避免减速尚未完成就请求大角速；上游预测控制器采用相同公式。直行6 m/s和停车原地转向4 rad/s的独立上限保留。该量约束的是无侧滑转弯需求 `abs(v*w)`，不能当作包含接触和侧滑后的净加速度实测。
+
+真实横滚/俯仰超 `tilt_stop_radians=0.08726646`（5°）后切断施力，保存约五秒 `STABILITY_TRACE`、附近模型及故障帧原生接触，并在物理步结束暂停场景。保护保持锁定，需重新启动；不施加扶正力或重设车体位姿。正常运行每秒输出 `BODY_STATE`，日志随 Gazebo 启动日志保存。重启前先归档日志，详见 [启动与恢复命令](../../docs/local-start-20261017.md)。当前完整单轮结果与被撤回的规划器试验见 [本轮记录](../../docs/stability-turn-limit-20261017.md)。
+
 此包在 codex/body-velocity-control 分支使用，替代 gazebo_ros_diff_drive 的驱动和里程计职责。方案参考 rmoss MecanumDrive2 的车体速度反馈与直接施力思路，是独立实现，未移植 Ignition 插件或其依赖。
 
 ## 控制方法

@@ -1,6 +1,26 @@
 #include <gtest/gtest.h>
 #include "aic_timed_planner/motion_model.hpp"
 using namespace aic_timed_planner;
+TEST(StabilityCommand, StraightAndStationaryTurnKeepRequestedSpeed) {
+  auto c=stable_command(6.,0.,6.,3.);EXPECT_DOUBLE_EQ(c.v,6.);EXPECT_DOUBLE_EQ(c.w,0.);
+  c=stable_command(0.,4.,0.,3.);EXPECT_DOUBLE_EQ(c.v,0.);EXPECT_DOUBLE_EQ(c.w,4.);
+}
+TEST(StabilityCommand, CurvaturePreservedAtSteadyState) {
+  auto c=stable_command(6.,4.,0.,3.);
+  EXPECT_NEAR(std::abs(c.v*c.w),3.,1e-9);EXPECT_NEAR(c.w/c.v,4./6.,1e-9);
+}
+TEST(StabilityCommand, MeasuredSpeedBoundsSteeringBeforeBrakingCompletes) {
+  for(double v:{-6.,6.}) for(double w:{-4.,4.}) {
+    auto c=stable_command(v,w,v,3.);
+    EXPECT_LE(std::abs(v*c.w),3.+1e-9);EXPECT_LE(std::abs(c.v*c.w),3.+1e-9);
+    EXPECT_EQ(std::signbit(c.v),std::signbit(v));EXPECT_EQ(std::signbit(c.w),std::signbit(w));
+    auto again=stable_command(c.v,c.w,v,3.);
+    EXPECT_DOUBLE_EQ(again.v,c.v);EXPECT_DOUBLE_EQ(again.w,c.w);
+  }
+}
+TEST(StabilityCommand, LegacyScenesCanLeaveCoupledLimitDisabled) {
+  auto c=stable_command(6.,4.,6.,0.);EXPECT_DOUBLE_EQ(c.v,6.);EXPECT_DOUBLE_EQ(c.w,4.);
+}
 TEST(MotionModel, DeceleratesAndReversesAtNativeBoundary) {
   Motion m{0,0,4,0,.5,.35}; Observation o{10,3.79,1,1,true};
   const auto p=forecast(m,o,10,2);

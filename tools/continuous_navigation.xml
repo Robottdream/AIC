@@ -3,7 +3,11 @@
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
     <RecoveryNode number_of_retries="3" name="NavigateRecovery">
-      <PipelineSequence name="NavigateWithLivePrediction">
+      <Sequence name="PlanForCurrentGoalBeforeDriving">
+        <!-- Blackboard paths survive between goals. A failed initial search
+             must never execute the previous cargo/area endpoint. -->
+        <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        <PipelineSequence name="NavigateWithLivePrediction">
         <RateController hz="5.0">
           <!-- A failed new search must not erase the currently executing path.
                The controller still validates every command against live actors. -->
@@ -18,7 +22,8 @@
           <FollowPath path="{path}" controller_id="FollowPath"/>
           <ClearEntireCostmap name="ClearLocal" service_name="local_costmap/clear_entirely_local_costmap"/>
         </RecoveryNode>
-      </PipelineSequence>
+        </PipelineSequence>
+      </Sequence>
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <Sequence name="RefreshCostmaps">

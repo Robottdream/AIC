@@ -5,11 +5,11 @@ amcl:
     initial_pose.x: 0.0
     initial_pose.y: 0.0
     initial_pose.yaw: 0.0
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    alpha5: 0.2
+    alpha1: 0.005
+    alpha2: 0.005
+    alpha3: 0.005
+    alpha4: 0.005
+    alpha5: 0.005
     base_frame_id: base_footprint
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
@@ -21,7 +21,7 @@ amcl:
     laser_max_range: 100.0
     laser_min_range: -1.0
     laser_model_type: likelihood_field
-    max_beams: 60
+    max_beams: 120
     max_particles: 2000
     min_particles: 500
     odom_frame_id: odom
@@ -137,7 +137,12 @@ controller_server:
       max_angular_accel: 10.0
       transform_tolerance: 0.2
       min_approach_linear_velocity: 0.08
-      approach_velocity_scaling_dist: 1.2
+      approach_velocity_scaling_dist: 2.4
+      approach_deceleration: 6.0
+      approach_reaction_time: 0.2
+      approach_stop_buffer: 0.1
+      rotation_reaction_time: 0.15
+      max_lateral_acceleration: 3.0
       use_collision_detection: false
       max_allowed_time_to_collision_up_to_carrot: 2.0
       use_regulated_linear_velocity_scaling: true

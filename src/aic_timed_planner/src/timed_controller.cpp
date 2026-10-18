@@ -30,6 +30,10 @@ class TimeAwareController : public nav2_regulated_pure_pursuit_controller::Regul
   double robot_x_=0,robot_y_=0,robot_yaw_=0,robot_stamp_=-1;
   double robot_v_=0,robot_w_=0;
   MotionLimits limits_;
+  ApproachLimits approach_;
+  double rotation_response_time_=.15;
+  double lateral_limit_=0.;
+  nav_msgs::msg::Path retained_plan_;
   double control_dt_=.05;
 
 public:
@@ -47,13 +51,26 @@ public:
     declare("linear_deceleration",rclcpp::ParameterValue(5.));
     declare("angular_deceleration",rclcpp::ParameterValue(10.));
     declare("max_angular_velocity",rclcpp::ParameterValue(4.));
+    declare("approach_deceleration",rclcpp::ParameterValue(6.));
+    declare("approach_reaction_time",rclcpp::ParameterValue(.20));
+    declare("approach_stop_buffer",rclcpp::ParameterValue(.10));
+    declare("rotation_reaction_time",rclcpp::ParameterValue(.15));
+    declare("max_lateral_acceleration",rclcpp::ParameterValue(0.));
     parent_->get_parameter(name+".linear_acceleration",limits_.linear_accel);
     parent_->get_parameter(name+".linear_deceleration",limits_.linear_decel);
     parent_->get_parameter(name+".max_angular_accel",limits_.angular_accel);
     parent_->get_parameter(name+".angular_deceleration",limits_.angular_decel);
     parent_->get_parameter(name+".max_angular_velocity",limits_.max_angular_velocity);
+    parent_->get_parameter(name+".approach_deceleration",approach_.deceleration);
+    parent_->get_parameter(name+".approach_reaction_time",approach_.response_time);
+    parent_->get_parameter(name+".approach_stop_buffer",approach_.stop_buffer);
+    parent_->get_parameter(name+".rotation_reaction_time",rotation_response_time_);
+    parent_->get_parameter(name+".max_lateral_acceleration",lateral_limit_);
     const double frequency=parent_->get_parameter("controller_frequency").as_double();
-    if(!limits_.valid() || !std::isfinite(frequency) || frequency<=0)
+    if(!limits_.valid() || !approach_.valid() || approach_.deceleration>limits_.linear_decel ||
+       !std::isfinite(rotation_response_time_) || rotation_response_time_<0 ||
+       !std::isfinite(lateral_limit_) || lateral_limit_<0 ||
+       !std::isfinite(frequency) || frequency<=0)
       throw std::runtime_error("Invalid predictive controller motion limits");
     control_dt_=1./frequency;
     declare("obstacle_names",rclcpp::ParameterValue(std::vector<std::string>{}));
@@ -112,11 +129,28 @@ public:
     RegulatedPurePursuitController::cleanup();
   }
 
+  void setPlan(const nav_msgs::msg::Path & path) override {
+    if(path.poses.empty()) throw nav2_core::PlannerException("Refusing an empty replacement path");
+    RegulatedPurePursuitController::setPlan(path);
+    std::lock_guard<std::mutex> lock(mutex_);retained_plan_=path;
+  }
+
   geometry_msgs::msg::TwistStamped computeVelocityCommands(
     const geometry_msgs::msg::PoseStamped & pose,const geometry_msgs::msg::Twist & velocity,
     nav2_core::GoalChecker * goal_checker) override
   {
-    auto command=RegulatedPurePursuitController::computeVelocityCommands(pose,velocity,goal_checker);
+    geometry_msgs::msg::TwistStamped command;
+    try {
+      command=RegulatedPurePursuitController::computeVelocityCommands(pose,velocity,goal_checker);
+    } catch(const nav2_core::PlannerException &) {
+      // RPP prunes its working path. A temporarily failed replan must not leave
+      // that mutable working copy exhausted while a valid complete route exists.
+      nav_msgs::msg::Path retained;
+      {std::lock_guard<std::mutex> lock(mutex_);retained=retained_plan_;}
+      if(retained.poses.empty()) throw;
+      RegulatedPurePursuitController::setPlan(retained);
+      command=RegulatedPurePursuitController::computeVelocityCommands(pose,velocity,goal_checker);
+    }
     double now=parent_->now().seconds(),rx,ry,ra,rv,rw;
     std::shared_ptr<nav2_costmap_2d::Costmap2D> map;
     std::vector<Observation> observations;
@@ -145,7 +179,29 @@ public:
     auto footprint=costmap_ros_->getRobotFootprint();double hx=0,hy=0;
     for(auto p:footprint) {hx=std::max(hx,std::abs(p.x));hy=std::max(hy,std::abs(p.y));}
     nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *> checker(map.get());
-    const double px=pose.pose.position.x,py=pose.pose.position.y,pa=tf2::getYaw(pose.pose.orientation);
+    // ControllerServer supplies its local costmap frame (odom in this scene),
+    // whereas global_plan_ is in map. RPP transforms internally; our separate
+    // geometry and prediction must explicitly use the same map coordinates.
+    geometry_msgs::msg::PoseStamped geometry_pose=pose;
+    if(pose.header.frame_id!=plan.header.frame_id) {
+      try {
+        tf_->transform(pose,geometry_pose,plan.header.frame_id,transform_tolerance_);
+      } catch(const tf2::TransformException & error) {
+        throw nav2_core::PlannerException(std::string("Predictive pose transform failed: ")+error.what());
+      }
+      RCLCPP_INFO_ONCE(parent_->get_logger(),"Predictive geometry transformed from %s to %s",
+                       pose.header.frame_id.c_str(),plan.header.frame_id.c_str());
+    }
+    const double px=geometry_pose.pose.position.x,py=geometry_pose.pose.position.y,
+                 pa=tf2::getYaw(geometry_pose.pose.orientation);
+    // This simulator's map and world share the same surveyed origin. A large
+    // AMCL jump must not reinterpret every cargo goal in another part of the map.
+    if(std::hypot(px-rx,py-ry)>.75 || std::abs(wrap(pa-ra))>.5) {
+      RCLCPP_ERROR_THROTTLE(parent_->get_logger(),*parent_->get_clock(),1000,
+        "Localization disagrees with simulator: position %.2fm, heading %.2frad",
+        std::hypot(px-rx,py-ry),std::abs(wrap(pa-ra)));
+      throw nav2_core::PlannerException("Localization jump: refusing to follow displaced goals");
+    }
     const FrameAlignment alignment{{px,py,pa},{rx,ry,ra}};
     // Planning and control both validate the physical world footprint using the
     // same current localization/world correspondence, never a shifted map path.
@@ -171,17 +227,30 @@ public:
       }
       return true;
     };
-    const double nominal_v=command.twist.linear.x;double nominal_w=std::clamp(command.twist.angular.z,-limits_.max_angular_velocity,limits_.max_angular_velocity);
+    double nominal_v=command.twist.linear.x;
+    double nominal_w=std::clamp(command.twist.angular.z,-limits_.max_angular_velocity,limits_.max_angular_velocity);
+    const double goal_distance=std::hypot(plan.poses.back().pose.position.x-px,
+                                         plan.poses.back().pose.position.y-py);
+    if(nominal_v>0) {
+      const double limited=std::min(nominal_v,approach_speed(goal_distance,cruise,approach_,min_approach_linear_velocity_));
+      nominal_w*=limited/nominal_v;  // Preserve the requested path curvature.
+      nominal_v=limited;
+    }
     const bool rotation=std::abs(nominal_v)<.001;
     if(rotation && !plan.poses.empty()) {
       size_t carrot=0;
       while(carrot+1<plan.poses.size() && std::hypot(plan.poses[carrot].pose.position.x-px,plan.poses[carrot].pose.position.y-py)<lookahead) ++carrot;
-      const double target=std::hypot(plan.poses.back().pose.position.x-px,plan.poses.back().pose.position.y-py)<.20 ?
-        tf2::getYaw(plan.poses.back().pose.orientation) : std::atan2(plan.poses[carrot].pose.position.y-py,plan.poses[carrot].pose.position.x-px);
-      const double brake_speed=std::sqrt(2.*limits_.angular_decel*std::abs(wrap(target-pa)));
-      nominal_w=std::clamp(nominal_w,-brake_speed,brake_speed);
+      const auto & goal=plan.poses.back().pose;
+      const auto & look=plan.poses[carrot].pose.position;
+      const double target=alignment_heading({px,py,pa},
+        {goal.position.x,goal.position.y,tf2::getYaw(goal.orientation)},
+        {look.x,look.y},goal_dist_tol_);
+      const double allowed=std::abs(alignment_speed(wrap(target-pa),rv,std::abs(nominal_w),
+                                                   limits_.angular_decel,rotation_response_time_));
+      nominal_w=std::copysign(allowed,nominal_w);
     }
     auto rollout=[&](double cv,double cw,double scale,bool turn_only=false,bool brake_only=false,double prefix=.30) {
+      const auto first=stable_command(cv,cw,rv,lateral_limit_);cv=first.v;cw=first.w;
       double x=px,y=py,a=pa,v=rv,w=rw;
       size_t nearest=0;
       for(double t=.05;t<=(brake_only ? 4.0001 : 2.0001);t+=.05) {
@@ -193,11 +262,14 @@ public:
             size_t carrot=0;
             while(carrot+1<plan.poses.size() && std::hypot(plan.poses[carrot].pose.position.x-x,
               plan.poses[carrot].pose.position.y-y)<lookahead) ++carrot;
-            double target=std::hypot(plan.poses.back().pose.position.x-x,plan.poses.back().pose.position.y-y)<.20 ?
-              tf2::getYaw(plan.poses.back().pose.orientation) :
-              std::atan2(plan.poses[carrot].pose.position.y-y,plan.poses[carrot].pose.position.x-x);
+            const auto & goal=plan.poses.back().pose;
+            const auto & look=plan.poses[carrot].pose.position;
+            const double target=alignment_heading({x,y,a},
+              {goal.position.x,goal.position.y,tf2::getYaw(goal.orientation)},
+              {look.x,look.y},goal_dist_tol_);
             const double error=wrap(target-a);
-            target_v=0;target_w=std::copysign(std::min(limits_.max_angular_velocity,std::sqrt(2.*limits_.angular_decel*std::abs(error))),error);
+            target_v=0;target_w=alignment_speed(error,v,limits_.max_angular_velocity,
+                                               limits_.angular_decel,rotation_response_time_);
           } else {
             double distance=1e9;
             for(size_t i=nearest;i<plan.poses.size();++i) {
@@ -212,12 +284,14 @@ public:
             double curvature=2.*(-dx*std::sin(a)+dy*std::cos(a))/std::max(.01,dx*dx+dy*dy);
             double radius=1./std::max(.001,std::abs(curvature));
             double remain=std::hypot(plan.poses.back().pose.position.x-x,plan.poses.back().pose.position.y-y);
-            target_v=scale*std::min(cruise,std::max(.08,cruise*remain/1.2));
+            target_v=scale*std::min(approach_speed(remain,cruise,approach_,min_approach_linear_velocity_),
+              std::max(min_approach_linear_velocity_,cruise*remain/approach_velocity_scaling_dist_));
             if(radius<1.1) target_v=std::min(target_v,std::max(.18,cruise*radius/1.1));
             target_w=std::clamp(target_v*curvature,-limits_.max_angular_velocity,limits_.max_angular_velocity);
           }
         }
-        KinematicState state{x,y,a,v,w};advance(state,target_v,target_w,.05,limits_);
+        const auto limited=stable_command(target_v,target_w,v,lateral_limit_);
+        KinematicState state{x,y,a,v,w};advance(state,limited.v,limited.w,.05,limits_);
         x=state.x;y=state.y;a=state.yaw;v=state.v;w=state.w;
         if(!safe(x,y,a,t)) return false;
       }
@@ -271,8 +345,10 @@ public:
             plan.poses[carrot].pose.position.y-py)<lookahead) ++carrot;
       const double error=wrap(std::atan2(plan.poses[carrot].pose.position.y-py,
         plan.poses[carrot].pose.position.x-px)-pa);
-      const double requested=std::copysign(std::min(limits_.max_angular_velocity,std::sqrt(2.*limits_.angular_decel*std::abs(error))),error);
-      const double angular=std::clamp(requested,rw-limits_.angular_accel*control_dt_,rw+limits_.angular_accel*control_dt_);
+      const double requested=alignment_speed(error,rv,limits_.max_angular_velocity,
+                                             limits_.angular_decel,rotation_response_time_);
+      const double angular=std::abs(rv)>.08 ? 0. :
+        std::clamp(requested,rw-limits_.angular_accel*control_dt_,rw+limits_.angular_accel*control_dt_);
       if(std::abs(error)>.05 && feasible(0.,angular,0.,true)) {
         chosen_v=0.;chosen_w=angular;found=true;
       }
@@ -297,6 +373,8 @@ public:
       RCLCPP_WARN_THROTTLE(parent_->get_logger(),*parent_->get_clock(),500,"No collision-free short-horizon command; request replanning");
       throw nav2_core::PlannerException("No safe predictive command");
     }
+    const auto selected=stable_command(chosen_v,chosen_w,rv,lateral_limit_);
+    chosen_v=selected.v;chosen_w=selected.w;
     command.twist.linear.x=chosen_v;command.twist.angular.z=chosen_w;
     std_msgs::msg::String debug;std::ostringstream stream;
     stream<<"{\"sim_time\":"<<now<<",\"nominal\":["<<nominal_v<<","<<nominal_w<<"],\"escape\":"<<(!safe_to_stop ? "true" : "false")<<",\"retreat\":"<<(chosen_v<-.001 ? "true" : "false")<<",\"selected\":["<<chosen_v<<","<<chosen_w<<"]}";

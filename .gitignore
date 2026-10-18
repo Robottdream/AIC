@@ -32,6 +32,10 @@ runtime/
 /*.pdf
 /*.docx
 /*.txt
+# Local copies of official reference documents and score sheets
+/docs/*.pdf
+/docs/*.docx
+/docs/*.txt
 
 # Local model weights
 *.gguf

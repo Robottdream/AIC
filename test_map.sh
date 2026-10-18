@@ -14,6 +14,15 @@ case "$1" in
 esac
 AIC_TEST_WORKSPACE="/tmp/aic-map-$AIC_SCENE_NAME"
 AIC_SCENE_ROOT="$AIC_SOURCE_ROOT/scenarios/$AIC_SCENE_NAME"
+export AIC_ROSBRIDGE_PORT="${AIC_ROSBRIDGE_PORT:-8765}"
+# Runtime assets stay in the source tree; the staged workspace has no runtime/.
+# Preserve explicit paths, including installations outside this checkout.
+if [[ -z "${LLAMA_BIN:-}" && -f "$AIC_SOURCE_ROOT/runtime/llama.cpp/build/bin/llama-server" ]]; then
+  export LLAMA_BIN="$AIC_SOURCE_ROOT/runtime/llama.cpp/build/bin/llama-server"
+fi
+if [[ -z "${MODEL:-}" && -f "$AIC_SOURCE_ROOT/runtime/models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf" ]]; then
+  export MODEL="$AIC_SOURCE_ROOT/runtime/models/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf"
+fi
 mkdir -p "$AIC_TEST_WORKSPACE/src" "$AIC_TEST_WORKSPACE/tools" "$AIC_TEST_WORKSPACE/scene"
 rsync -a "$AIC_SOURCE_ROOT/src/" "$AIC_TEST_WORKSPACE/src/"
 rsync -a "$AIC_SOURCE_ROOT/tools/" "$AIC_TEST_WORKSPACE/tools/"

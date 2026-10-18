@@ -25,6 +25,18 @@ struct FrameAlignment {
   }
 };
 struct KinematicState {double x,y,yaw,v,w;};
+struct DriveCommand {double v,w;};
+// Preserve curvature while reducing simultaneous translation/rotation, then
+// limit steering against measured speed during the braking transient.
+inline DriveCommand stable_command(double v,double w,double measured_v,double lateral_limit) {
+  if(lateral_limit<=0) return {v,w};
+  const double demand=std::abs(v*w);
+  if(demand>lateral_limit) {
+    const double scale=std::sqrt(lateral_limit/demand);v*=scale;w*=scale;
+  }
+  const double bound=lateral_limit/std::max({.01,std::abs(v),std::abs(measured_v)});
+  return {v,std::clamp(w,-bound,bound)};
+}
 struct MotionLimits {
   double linear_accel=3.5,linear_decel=5.,angular_accel=10.,max_angular_velocity=4.,angular_decel=10.;
   bool valid() const {
@@ -35,6 +47,39 @@ struct MotionLimits {
       std::isfinite(angular_decel) && angular_decel>0;
   }
 };
+// Reserve distance travelled during feedback/actuation delay before braking.
+// Solves distance = speed * response_time + speed^2 / (2 * deceleration).
+inline double braking_speed(double distance,double deceleration,double response_time) {
+  if(distance<=0) return 0.;
+  const double delay_speed=deceleration*response_time;
+  return std::sqrt(delay_speed*delay_speed+2.*deceleration*distance)-delay_speed;
+}
+struct ApproachLimits {
+  double deceleration=6.,response_time=.20,stop_buffer=.10;
+  bool valid() const {
+    return std::isfinite(deceleration) && deceleration>0 &&
+      std::isfinite(response_time) && response_time>=0 &&
+      std::isfinite(stop_buffer) && stop_buffer>=0;
+  }
+};
+inline double approach_speed(double remaining,double cruise,const ApproachLimits & limits,
+                             double minimum=.08) {
+  return std::min(cruise,std::max(minimum,braking_speed(
+    std::max(0.,remaining-limits.stop_buffer),limits.deceleration,limits.response_time)));
+}
+inline double alignment_speed(double error,double measured_linear,double maximum,
+                              double angular_deceleration,double response_time) {
+  // Avoid steering the still-moving chassis into an arc at the final pose.
+  if(std::abs(measured_linear)>.08) return 0.;
+  return std::copysign(std::min(maximum,braking_speed(
+    std::abs(wrap(error)),angular_deceleration,response_time)),error);
+}
+inline double alignment_heading(Pose2 robot,Pose2 goal,Point carrot,double position_tolerance) {
+  // Use the goal checker's position tolerance; an earlier yaw switch can leave
+  // the robot stopped outside the position acceptance circle.
+  return std::hypot(goal.x-robot.x,goal.y-robot.y)<position_tolerance ? goal.yaw :
+    std::atan2(carrot.y-robot.y,carrot.x-robot.x);
+}
 inline void advance(KinematicState & state,double target_v,double target_w,double dt,const MotionLimits & limits=MotionLimits{}) {
   state.v+=std::clamp(target_v-state.v,-limits.linear_decel*dt,limits.linear_accel*dt);
   const bool reversing=state.w*target_w<0;

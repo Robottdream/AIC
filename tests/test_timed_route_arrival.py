@@ -15,6 +15,7 @@ class TimedArrivalTests(unittest.TestCase):
         n.goal_pose = NS(pose=NS(position=NS(x=3.45, y=-11.0)))
         n.get_clock = lambda : NS(now=lambda : NS(nanoseconds=2000000000))
         n.near_goal_started = None
+        n._recover_navigation = lambda *_: False
         n.get_logger = lambda : NS(error=lambda _: None, info=lambda _: None)
         messages = []
         n.status_pub = NS(publish=lambda m: messages.append(m.data))
@@ -30,3 +31,15 @@ class TimedArrivalTests(unittest.TestCase):
         (n, messages) = self.navigator((2.0, 3.33, -10.95))
         n.result_callback(NS(result=lambda : NS(status=4)), 1)
         self.assertEqual(messages, ['succeeded'])
+
+    def test_recovery_keeps_task_pending_instead_of_triggering_release_or_failure(self):
+        for status, measured, reason in (
+                (6, (2., 0., 0.), 'aborted'),
+                (4, (2., 0., 0.), 'arrival_position_mismatch'),
+                (4, (1., 3.45, -11.), 'arrival_pose_unavailable')):
+            n, messages = self.navigator(measured)
+            calls = []
+            n._recover_navigation = lambda *args: calls.append(args) or True
+            n.result_callback(NS(result=lambda: NS(status=status)), 1)
+            self.assertEqual(calls, [(1, reason)])
+            self.assertEqual(messages, [])

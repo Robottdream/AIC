@@ -234,10 +234,18 @@ def main():
     }
     # This map has a diagonal crossing; leave the stable map's Nav2 file intact.
     navigation = yaml.safe_load((ROOT/'src/yzbot/bot_navigation/param/originbot_nav2.yaml').read_text())
+    # The body-drive odometry is measured world motion, not wheel integration.
+    # Large wheel-slip noise can lose the correct hypothesis at high speed.
+    localization = navigation['amcl']['ros__parameters']
+    localization.update(alpha1=.005, alpha2=.005, alpha3=.005,
+                        alpha4=.005, alpha5=.005, max_beams=120)
     follow = navigation['controller_server']['ros__parameters']['FollowPath']
     follow.update(desired_linear_vel=6.0, linear_acceleration=10.0, linear_deceleration=10.0, max_angular_velocity=4.0, angular_deceleration=10.0, max_lookahead_dist=1.5, cost_scaling_dist=0.9,
                   max_allowed_time_to_collision_up_to_carrot=2.0,
-                  rotate_to_heading_angular_vel=4.0, max_angular_accel=10.0)
+                  rotate_to_heading_angular_vel=4.0, max_angular_accel=10.0,
+                  approach_velocity_scaling_dist=2.4, approach_deceleration=6.0,
+                  approach_reaction_time=0.2, approach_stop_buffer=0.1,
+                  rotation_reaction_time=0.15, max_lateral_acceleration=3.0)
     smoother = navigation['velocity_smoother']['ros__parameters']
     smoother['max_velocity'][0] = 6.0
     smoother['max_velocity'][2] = 4.0
