@@ -2,11 +2,13 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from action_msgs.msg import GoalStatus
 from std_msgs.msg import String, Int32
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_msgs.action import ComputePathToPose
+from nav_msgs.msg import OccupancyGrid
+from .static_routes import StaticRouteCosts
 from rclpy.timer import Timer
 import json
 import math
@@ -62,6 +64,14 @@ class MainControllerNode(Node):
         self.current_robot_pose = (0.0, 0.0)
         self.current_robot_yaw = 0.0
         self.turn_cost_weight = float(self.declare_parameter("turn_cost_weight", 0.20).value)
+        # Zero restores exhaustive checking for controlled comparisons.
+        self.selection_batch_size = self.declare_parameter("selection_batch_size", 3).value
+        if type(self.selection_batch_size) is not int or self.selection_batch_size < 0:
+            raise ValueError("selection_batch_size must be a nonnegative integer")
+        self.static_routes = StaticRouteCosts()
+        self.create_subscription(OccupancyGrid, '/map', self._static_map_callback,
+            QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                       durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.plan_client = ActionClient(self, ComputePathToPose, "/compute_path_to_pose")
         self.selection_id = 0
         self.failed_blocks_for_step = set()
@@ -231,8 +241,66 @@ class MainControllerNode(Node):
         return ((difference(first, start_yaw) if first is not None else 0.0)
                 + (difference(end_yaw, last) if last is not None else 0.0))
 
+    def _static_map_callback(self, msg):
+        try:
+            q = msg.info.origin.orientation
+            # The planner also requires a world-aligned map in the map frame.
+            if (not all(math.isfinite(v) for v in (q.x, q.y, q.z, q.w))
+                    or msg.header.frame_id != 'map' or abs(q.x) > 1e-6
+                    or abs(q.y) > 1e-6 or abs(q.z) > 1e-6
+                    or not math.isfinite(q.w) or abs(abs(q.w) - 1.) > 1e-6):
+                raise ValueError('Static ranking requires a world-aligned map')
+            self.static_routes.update(msg.info.width, msg.info.height, msg.info.resolution,
+                (msg.info.origin.position.x, msg.info.origin.position.y), msg.data)
+        except Exception as exc:
+            # An unsupported/replaced map must not retain estimates from the old map.
+            self.static_routes = StaticRouteCosts()
+            self.get_logger().warn(f"静态排序不可用，回退完整查路：{exc}")
+
+    def _prefer_initial_west_red(self):
+        return (self.current_task['color'] == 'red' and self.current_task['to'] == 'A'
+                and self.current_task.get('original_num') == 3
+                and self.current_task.get('current_index') == 1
+                and self._remaining_same_area_tasks() > 0)
+
+    def _rank_static_candidates(self):
+        candidates = self.selection_candidates
+        poses = [item[2] for item in candidates]
+        outbound = self.static_routes.costs_from(self.current_robot_pose, poses, cache=False)
+        returns = self.static_routes.costs_from(self.current_assignment['area_pos'], poses)
+        if outbound is None or returns is None:
+            return False
+        # Preserve consecutive-task lookahead using all static candidates, not
+        # just the few that receive an expensive SE2/time reachability check.
+        future_by_block = {}
+        scored = []
+        for item, out, back in zip(candidates, outbound, returns):
+            block, direction, pose = item
+            penalty = self._approach_penalty(self.current_task['color'], block[2], direction)
+            bearing = math.atan2(pose[1] - self.current_robot_pose[1],
+                                 pose[0] - self.current_robot_pose[0])
+            turn = abs(math.atan2(math.sin(bearing - self.current_robot_yaw),
+                                  math.cos(bearing - self.current_robot_yaw)))
+            score = out + back + penalty + self.turn_cost_weight * turn
+            scored.append((score, item))
+            future_by_block[block[2]] = min(future_by_block.get(block[2], math.inf),
+                                           2. * back + penalty)
+        self.selection_static_future = future_by_block
+        remaining = self._remaining_same_area_tasks()
+        greedy = min(score for score, _ in scored)
+        def rank(entry):
+            score, (block, direction, _) = entry
+            future = sorted(cost for index, cost in future_by_block.items()
+                            if index != block[2] and math.isfinite(cost))
+            lookahead = sum(future[:remaining]) if len(future) >= remaining else 0.
+            preferred = self._prefer_initial_west_red() and block[2] == 3
+            return (not preferred, score > greedy + 3., score + lookahead,
+                    score, block[2], direction)
+        self.selection_candidates = [item for _, item in sorted(scored, key=rank)]
+        return True
+
     def _select_reachable_block(self):
-        """每件货物从当前定位出发，按 Nav2 实际往返路径重新选块。"""
+        """静态批量粗排，少量完整往返精查；整批失败则继续后续候选。"""
         if not self.current_assignment:
             return
         self.selection_id += 1
@@ -251,14 +319,27 @@ class MainControllerNode(Node):
         )
         self.selection_best = None
         self.selection_options = []
+        self.selection_static_future = None
+        self.selection_checked = 0
+        self.selection_requests = 0
+        self.selection_started = time.monotonic()
+        self.selection_fast = False
         if not self.selection_candidates:
             self._stop_failed_task(f"没有可选的{color}物块")
             return
         if not self.plan_client.wait_for_server(timeout_sec=2.0):
             self._stop_failed_task("Nav2路径规划服务不可用")
             return
+        if self.selection_batch_size:
+            try:
+                self.selection_fast = self._rank_static_candidates()
+            except Exception as exc:
+                self.get_logger().warn(f"静态粗排失败，回退完整查路：{exc}")
+                self.selection_static_future = None
+        self.selection_batch_end = self.selection_batch_size
         self.get_logger().info(
             f"按当前代价地图检查{len(self.selection_candidates)}个抓取位置及返回目标区域的路径"
+            f"；静态粗排={'启用' if self.selection_fast else '关闭'}，精查批量={self.selection_batch_size}"
         )
         self._plan_next_candidate(selection_id)
 
@@ -285,9 +366,8 @@ class MainControllerNode(Node):
     def _choose_route_with_lookahead(self):
         """Reserve cheap area round trips for later deliveries.
 
-        NavFn paths are bidirectional on this static map, so the planned
-        candidate-to-area length also estimates the next area-to-candidate leg.
-        Actual reachability is checked again before every later pickup.
+        Static round-trip estimates rank future deliveries only. Each selected
+        pickup/return is still checked with the full planner and live actors.
         """
         remaining = self._remaining_same_area_tasks()
         if remaining == 0:
@@ -295,16 +375,16 @@ class MainControllerNode(Node):
         # In this five-cargo layout, the west red block is safest from the
         # initial pose. Reaching it later from area A crossed the narrow wall
         # during validation; use the previously completed order when reachable.
-        if (self.current_task["color"] == "red" and self.current_task["to"] == "A"
-                and self.current_task.get("original_num") == 3
-                and self.current_task.get("current_index") == 1):
+        if self._prefer_initial_west_red():
             preferred = [option for option in self.selection_options if option[2][2] == 3]
             if preferred:
                 cost, _, block, direction = min(preferred, key=lambda option: option[0])
                 return (cost, block, direction)
 
-        future_cost_by_block = {}
+        future_cost_by_block = dict(self.selection_static_future or {})
         for current_cost, return_length, block, candidate_index in self.selection_options:
+            if self.selection_fast:
+                continue
             future_cost = 2.0 * return_length + self._approach_penalty(
                 self.current_task["color"], block[2], candidate_index
             )
@@ -317,7 +397,7 @@ class MainControllerNode(Node):
         for current_cost, _, block, candidate_index in self.selection_options:
             future = sorted(
                 cost for index, cost in future_cost_by_block.items()
-                if index != block[2]
+                if index != block[2] and math.isfinite(cost)
             )
             if len(future) < remaining:
                 continue
@@ -336,7 +416,9 @@ class MainControllerNode(Node):
     def _plan_next_candidate(self, selection_id):
         if selection_id != self.selection_id or self.current_step != "SELECT_BLOCK":
             return
-        if not self.selection_candidates:
+        batch_finished = (self.selection_fast
+                          and self.selection_checked >= self.selection_batch_end)
+        if not self.selection_candidates or (batch_finished and self.selection_best is not None):
             if self.selection_best is None:
                 self._stop_failed_task("当前没有可达且可返回目标区域的同色物块")
                 return
@@ -362,13 +444,23 @@ class MainControllerNode(Node):
             self.current_grasp_candidate_index = candidate_index
             self.attempted_candidate_indices = set()
             self.get_logger().info(f"选定可达物块：{self.selected_block[2]}，接近方向{candidate_index + 1}")
+            self.get_logger().info(
+                f"选块统计: 精查{self.selection_checked}位置，完整查路{self.selection_requests}次，"
+                f"耗时{time.monotonic() - self.selection_started:.3f}s")
             self.navigate_to_block()
             return
+        if batch_finished:
+            self.selection_batch_end += self.selection_batch_size
+            self.get_logger().info("本批候选无完整往返路径，继续精查下一批")
         block, candidate_index, candidate = self.selection_candidates.pop(0)
+        self.selection_checked += 1
         self._active_candidate = (block, candidate_index, candidate)
         request = ComputePathToPose.Goal()
         request.goal = self._pose_stamped(*candidate)
         request.use_start = False
+        self.selection_requests += 1
+        self._selection_request_started = time.monotonic()
+        self._selection_request_accepted = self._selection_request_started
         future = self.plan_client.send_goal_async(request)
         future.add_done_callback(
             lambda result: self._plan_response(result, selection_id, False)
@@ -379,6 +471,7 @@ class MainControllerNode(Node):
             return
         try:
             handle = future.result()
+            self._selection_request_accepted = time.monotonic()
             if not handle.accepted:
                 self._plan_next_candidate(selection_id)
                 return
@@ -395,6 +488,15 @@ class MainControllerNode(Node):
             return
         try:
             response = future.result()
+            duration = getattr(response.result, 'planning_time', None)
+            server = duration.sec + duration.nanosec / 1e9 if duration is not None else math.nan
+            now = time.monotonic()
+            self.get_logger().info(
+                f"查路计时: {'返程' if returning else '去程'}，"
+                f"端到端={now - self._selection_request_started:.3f}s，"
+                f"受理={self._selection_request_accepted - self._selection_request_started:.3f}s，"
+                f"取结果={now - self._selection_request_accepted:.3f}s，"
+                f"服务端规划={server:.3f}s，状态={response.status}")
             if response.status != GoalStatus.STATUS_SUCCEEDED or not response.result.path.poses:
                 self._plan_next_candidate(selection_id)
                 return
@@ -409,6 +511,9 @@ class MainControllerNode(Node):
                 area = self.current_assignment["area_pos"]
                 request.goal = self._pose_stamped(*area)
                 request.use_start = True
+                self.selection_requests += 1
+                self._selection_request_started = time.monotonic()
+                self._selection_request_accepted = self._selection_request_started
                 future = self.plan_client.send_goal_async(request)
                 future.add_done_callback(
                     lambda result: self._plan_response(result, selection_id, True)

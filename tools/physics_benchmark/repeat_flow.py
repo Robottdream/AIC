@@ -57,6 +57,7 @@ def main():
     force_limits={key:float(body.findtext(key)) for key in ['forward_limit','lateral_limit','yaw_limit']}
     (out/'protocol.json').write_text(json.dumps(dict(force_limits=force_limits,repeats=args.repeats,linear_speed=nav['velocity_smoother']['ros__parameters']['max_velocity'][0],angular_speed=nav['velocity_smoother']['ros__parameters']['max_velocity'][2],acceleration=nav['velocity_smoother']['ros__parameters']['max_accel'],deceleration=nav['velocity_smoother']['ros__parameters']['max_decel'],method='Independent cold starts; current configuration, no inter-trial tuning; headless; task events and raw poll timings retained'),indent=2))
     sources=[HERE/'repeat_flow.py',HERE/'native_probe.cpp',ROOT/'tools/benchmark_delivery.py',ROOT/'tools/record_navigation.py',ROOT/'src/aic_body_drive/src/body_drive.cpp',ROOT/'src/yzbot/mybot_description/urdf/originbot_with_arm_gazebo.xacro',ROOT/'src/nav_simple/nav_simple/simple_navigator.py']+list((ROOT/'src/aic_timed_planner/src').glob('*.cpp'))+list((ROOT/'src/aic_timed_planner/include').rglob('*.hpp'))
+    sources += list((ROOT/'src/main_controller/main_controller').glob('*.py'))
     for source in sources:
         target=out/'source-snapshot'/source.relative_to(ROOT);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,target)
     binaries=[ROOT/'install/aic_timed_planner/lib/libaic_timed_planner.so',ROOT/'install/aic_body_drive/lib/libaic_body_drive.so']
