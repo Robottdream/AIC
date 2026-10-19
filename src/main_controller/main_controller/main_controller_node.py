@@ -4,7 +4,7 @@ from rclpy.parameter import Parameter
 from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from action_msgs.msg import GoalStatus
-from std_msgs.msg import String, Int32
+from std_msgs.msg import String, Int32, Float64MultiArray
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_msgs.action import ComputePathToPose
 from nav_msgs.msg import OccupancyGrid
@@ -69,6 +69,10 @@ class MainControllerNode(Node):
         if type(self.selection_batch_size) is not int or self.selection_batch_size < 0:
             raise ValueError("selection_batch_size must be a nonnegative integer")
         self.static_routes = StaticRouteCosts()
+        self.return_prefetch_enabled = self.declare_parameter("return_prefetch_enabled", True).value
+        self.return_prefetch_tag = None
+        self.return_prefetch_pub = self.create_publisher(
+            Float64MultiArray, '/return_prefetch_request', 10)
         self.create_subscription(OccupancyGrid, '/map', self._static_map_callback,
             QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                        durability=DurabilityPolicy.TRANSIENT_LOCAL))
@@ -250,12 +254,34 @@ class MainControllerNode(Node):
                     or abs(q.y) > 1e-6 or abs(q.z) > 1e-6
                     or not math.isfinite(q.w) or abs(abs(q.w) - 1.) > 1e-6):
                 raise ValueError('Static ranking requires a world-aligned map')
-            self.static_routes.update(msg.info.width, msg.info.height, msg.info.resolution,
+            changed = self.static_routes.update(msg.info.width, msg.info.height, msg.info.resolution,
                 (msg.info.origin.position.x, msg.info.origin.position.y), msg.data)
+            if changed:
+                self._cancel_return_prefetch()
         except Exception as exc:
             # An unsupported/replaced map must not retain estimates from the old map.
             self.static_routes = StaticRouteCosts()
+            self._cancel_return_prefetch()
             self.get_logger().warn(f"静态排序不可用，回退完整查路：{exc}")
+
+    def _cancel_return_prefetch(self):
+        self.return_prefetch_tag = None
+        self.return_prefetch_pub.publish(Float64MultiArray(data=[]))
+
+    def _prefetch_return_route(self):
+        """Start after measured pickup motion; never send a navigation goal."""
+        if (not self.return_prefetch_enabled or self.current_step != 'NAV_TO_BLOCK'
+                or not self.current_assignment or not self.selected_block):
+            return
+        start = self.get_grasp_candidates(self.current_assignment['block_pos'])[
+            self.current_grasp_candidate_index]
+        goal = (*self.current_assignment['area_pos'], 0.)
+        tag = (self.selection_id, self.selected_block[2], start, goal)
+        if tag == self.return_prefetch_tag:
+            return
+        self.return_prefetch_tag = tag
+        self.return_prefetch_pub.publish(Float64MultiArray(data=[*start, *goal]))
+        self.get_logger().info(f"行进中预计算返程：{self.selected_block[2]} → {self.current_task['to']}区")
 
     def _prefer_initial_west_red(self):
         return (self.current_task['color'] == 'red' and self.current_task['to'] == 'A'
@@ -303,6 +329,7 @@ class MainControllerNode(Node):
         """静态批量粗排，少量完整往返精查；整批失败则继续后续候选。"""
         if not self.current_assignment:
             return
+        self._cancel_return_prefetch()
         self.selection_id += 1
         selection_id = self.selection_id
         self.current_step = "SELECT_BLOCK"
@@ -843,6 +870,7 @@ class MainControllerNode(Node):
         self.optimized_tasks = self.optimize_task_order(expanded_tasks)
         
         if not self.optimized_tasks:
+            self._cancel_return_prefetch()
             self.get_logger().error("任务优化失败，无法生成执行计划")
             # 没有任务时发布抓取数量为0
             self.number_pick_pub.publish(Int32(data=0))
@@ -858,6 +886,7 @@ class MainControllerNode(Node):
     # 处理下一个优化后的任务
     def _process_next_optimized_task(self):
         if not self.optimized_tasks:
+            self._cancel_return_prefetch()
             self.get_logger().info("所有优化任务执行完成，等待新任务...")
             self.current_task = None
             self.current_step = "WAIT_TASK"
@@ -925,7 +954,9 @@ class MainControllerNode(Node):
         if not self:
             return
         status = msg.data.strip()
-        if status == "succeeded":
+        if status == "moving":
+            self._prefetch_return_route()
+        elif status == "succeeded":
             if self.current_step == "NAV_TO_BLOCK":
                 self.get_logger().info("到达物块位置，准备抓取")
                 self.current_step = "GRASP"
@@ -958,6 +989,7 @@ class MainControllerNode(Node):
                     )
                     self._select_reachable_block()
             elif self.current_step == "NAV_TO_AREA":
+                self._cancel_return_prefetch()
                 self.current_area_nav_retry += 1
                 if self.current_area_nav_retry <= 1:
                     self.get_logger().warn(f"区域导航失败（{status}），重试一次")
@@ -978,6 +1010,7 @@ class MainControllerNode(Node):
     def _stop_failed_task(self, reason):
         """保留未完成货物状态，停止后续任务，等待人工重新下达命令。"""
         self.get_logger().error(reason)
+        self._cancel_return_prefetch()
         self.selection_id += 1
         self._clean_timers()
         self.current_task = None
@@ -1013,6 +1046,7 @@ class MainControllerNode(Node):
             self.get_logger().warn("机械臂抓取失败，立即重试")
             self._check_grasp(self_ref)
         elif status.startswith("place_reposition:") and self.current_step == "PLACE":
+            self._cancel_return_prefetch()
             if self.place_timer:
                 self.place_timer.cancel()
                 self.place_timer.destroy()
@@ -1053,6 +1087,7 @@ class MainControllerNode(Node):
     
     # 导航到物块（使用优化路径）
     def navigate_to_block(self):
+        self._cancel_return_prefetch()
         self._clean_timers()
         if not self.current_assignment:
             return
@@ -1075,6 +1110,8 @@ class MainControllerNode(Node):
     
     # 触发抓取
     def trigger_grasp(self):
+        if self.current_grasp_retry:
+            self._cancel_return_prefetch()
         if self.current_grasp_retry >= self.max_grasp_retry:
             self.get_logger().error(f"抓取重试达{self.max_grasp_retry}次，换同色物块")
             self.failed_blocks_for_step.add(self.current_assignment["block_idx"])

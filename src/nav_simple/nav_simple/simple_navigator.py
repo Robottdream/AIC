@@ -77,6 +77,7 @@ class SimpleNav2Navigator(Node):
         self.current_goal_handle = None
         self.emergency_stop_active = False
         self.request_id = 0
+        self.moving_request_id = None
         self.goal_pose = None
         self.near_goal_started = None
         self.current_target_cube = ""
@@ -141,8 +142,17 @@ class SimpleNav2Navigator(Node):
 
     def _world_callback(self, msg):
         if 'six_arm' in msg.name:
-            p = msg.pose[msg.name.index('six_arm')].position
+            index = msg.name.index('six_arm')
+            p = msg.pose[index].position
             self.world_pose = (self.get_clock().now().nanoseconds*1e-9, p.x, p.y)
+            if index < len(msg.twist):
+                velocity = msg.twist[index].linear
+                speed = math.hypot(velocity.x, velocity.y)
+                if (self.current_goal_handle is not None and not self.emergency_stop_active
+                        and self.moving_request_id != self.request_id and speed > .10):
+                    self.moving_request_id = self.request_id
+                    self.get_logger().info(f'实测车体已行进：{speed:.3f}m/s')
+                    self.status_pub.publish(String(data='moving'))
 
     def _update_controller_profile(self, ready=None):
         now = self.get_clock().now().nanoseconds*1e-9

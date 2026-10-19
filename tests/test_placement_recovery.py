@@ -57,18 +57,21 @@ class PlacementRecoveryTests(unittest.TestCase):
         actions['arm']();self.assertEqual(len(messages),1)
 
     def test_base_reposition_uses_actual_pose_and_preserves_heading(self):
-        C=methods(MAIN,'MainControllerNode',{'_arm_status_callback_impl'})
+        C=methods(MAIN,'MainControllerNode',{'_arm_status_callback_impl','_cancel_return_prefetch'})
+        C._cancel_return_prefetch.__globals__['Float64MultiArray']=NS
         node=C();node.current_step='PLACE';node.place_timer=None
         node.current_place_retry=1;node.max_place_retry=3
         node.current_robot_pose=(-7.83,-5.578);node.current_robot_yaw=.101
         node.area_nav_targets=[(-7.95,-5.56,0.)];node.area_nav_target_index=0
         node.get_logger=lambda:NS(warn=lambda *_:None)
+        canceled=[];node.return_prefetch_pub=NS(publish=lambda msg:canceled.append(msg.data))
         sent=[];node._send_current_area_target=lambda:sent.append(node.area_nav_targets[-1])
         C._arm_status_callback_impl(lambda:node,NS(data='place_reposition:-0.196:0.353'))
         self.assertEqual(len(sent),1)
         self.assertAlmostEqual(sent[0][0],-8.026)
         self.assertAlmostEqual(sent[0][1],-5.228)
         self.assertEqual(sent[0][2],.101)
+        self.assertEqual(canceled,[[]])
 
 
 if __name__=='__main__':unittest.main()

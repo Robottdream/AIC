@@ -1,13 +1,18 @@
 #include <chrono>
+#include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <optional>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <thread>
 #include "aic_timed_planner/motion_model.hpp"
+#include "aic_timed_planner/prepared_route.hpp"
 #include "nav2_core/global_planner.hpp"
 #include "nav2_costmap_2d/footprint_collision_checker.hpp"
 #include "nav2_util/node_utils.hpp"
@@ -33,6 +38,17 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
   struct SearchNode {
     double x,y,yaw,t,v,g; int heading,parent;
   };
+  struct PreparedRoute {
+    std::shared_ptr<Grid> grid;
+    Pose2 start,goal;
+    std::vector<RouteSample> samples;
+    std::chrono::steady_clock::time_point created;
+    uint64_t generation=0;
+  };
+  struct PrefetchJob {
+    geometry_msgs::msg::PoseStamped start,goal;
+    uint64_t generation;
+  };
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   std::string name_,frame_;
@@ -46,6 +62,15 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
   rclcpp::Subscription<gazebo_msgs::msg::ModelStates>::SharedPtr robot_sub_;
   Pose2 robot_world_{0,0,0};double robot_stamp_=-1;
   rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr debug_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr prefetch_pub_;
+  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr prefetch_sub_;
+  std::mutex prefetch_mutex_;
+  std::condition_variable prefetch_cv_;
+  std::optional<PrefetchJob> pending_prefetch_;
+  std::optional<PreparedRoute> prepared_;
+  std::atomic<uint64_t> prefetch_generation_{0};
+  std::atomic<bool> prefetch_stopping_{true};
+  std::thread prefetch_thread_;
   std::unordered_map<unsigned,std::vector<float>> heuristic_cache_;
   const Grid * heuristic_grid_=nullptr;
   double speed_=2.2,accel_=3.5,decel_=5.,limit_=1.5,horizon_=90.;
@@ -56,6 +81,73 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
   double preferred_static_clearance_=.85,wall_clearance_weight_=3.,dynamic_clearance_weight_=4.;
   const double step_=.20;
   const int headings_=32;
+
+  void prefetchEvent(const char * event,uint64_t generation,double seconds=0.) {
+    if(!prefetch_pub_ || !prefetch_pub_->is_activated()) return;
+    std_msgs::msg::String message;std::ostringstream json;
+    json<<"{\"event\":\""<<event<<"\",\"generation\":"<<generation
+        <<",\"sim\":"<<node_->now().seconds()<<",\"seconds\":"<<seconds<<"}";
+    message.data=json.str();prefetch_pub_->publish(message);
+    RCLCPP_INFO(node_->get_logger(),"Return prefetch %s generation=%lu wall=%.3fs",
+                event,static_cast<unsigned long>(generation),seconds);
+  }
+
+  void invalidatePrefetch() {
+    std::lock_guard<std::mutex> lock(prefetch_mutex_);
+    ++prefetch_generation_;pending_prefetch_.reset();prepared_.reset();
+  }
+
+  void stopPrefetch() {
+    prefetch_stopping_=true;invalidatePrefetch();prefetch_cv_.notify_all();
+    if(prefetch_thread_.joinable()) prefetch_thread_.join();
+  }
+
+  void prefetchRequest(std_msgs::msg::Float64MultiArray::ConstSharedPtr msg) {
+    // Empty request explicitly cancels old task/direction/stop/map work.
+    invalidatePrefetch();
+    if(msg->data.empty() || prefetch_stopping_) return;
+    if(msg->data.size()!=6) return;
+    for(double value:msg->data) if(!std::isfinite(value)) return;
+    PrefetchJob job;job.generation=prefetch_generation_.load();
+    job.start.header.frame_id=job.goal.header.frame_id=frame_;
+    job.start.pose.position.x=msg->data[0];job.start.pose.position.y=msg->data[1];
+    job.goal.pose.position.x=msg->data[3];job.goal.pose.position.y=msg->data[4];
+    tf2::Quaternion q;q.setRPY(0,0,msg->data[2]);job.start.pose.orientation=tf2::toMsg(q);
+    q.setRPY(0,0,msg->data[5]);job.goal.pose.orientation=tf2::toMsg(q);
+    {std::lock_guard<std::mutex> lock(prefetch_mutex_);pending_prefetch_=job;}
+    prefetchEvent("queued",job.generation);prefetch_cv_.notify_one();
+  }
+
+  void prefetchLoop() {
+    while(!prefetch_stopping_) {
+      PrefetchJob job;
+      {
+        std::unique_lock<std::mutex> lock(prefetch_mutex_);
+        prefetch_cv_.wait(lock,[&]{return prefetch_stopping_ || pending_prefetch_.has_value();});
+        if(prefetch_stopping_) break;
+        job=*pending_prefetch_;pending_prefetch_.reset();
+      }
+      const auto began=std::chrono::steady_clock::now();
+      PreparedRoute route;route.generation=job.generation;
+      try {
+        // Separate search state/heuristic field: never submit an action that
+        // could preempt the active BT planner or lock its heuristic cache.
+        auto path=plan(job.start,job.goal,&route);
+        const double elapsed=std::chrono::duration<double>(std::chrono::steady_clock::now()-began).count();
+        bool stored=false;
+        {
+          std::lock_guard<std::mutex> lock(prefetch_mutex_);
+          if(!prefetch_stopping_ && job.generation==prefetch_generation_ && !path.poses.empty()) {
+            prepared_=std::move(route);stored=true;
+          }
+        }
+        prefetchEvent(stored ? "ready" : "discarded",job.generation,elapsed);
+      } catch(const std::exception & e) {
+        RCLCPP_WARN(node_->get_logger(),"Return prefetch failed: %s",e.what());
+        prefetchEvent("failed",job.generation);
+      }
+    }
+  }
 
   static void field(const std::shared_ptr<Grid> & g, std::vector<float> & values,
                     const std::vector<unsigned> & seeds, bool allow_near_wall,
@@ -89,6 +181,7 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
 
   void mapCallback(nav_msgs::msg::OccupancyGrid::ConstSharedPtr msg)
   {
+    invalidatePrefetch();
     if(msg->info.resolution<=0 || std::abs(tf2::getYaw(msg->info.origin.orientation))>1e-6) {
       RCLCPP_ERROR(node_->get_logger(),"Timed planner requires a valid world-aligned static map");return;
     }
@@ -138,6 +231,7 @@ class TimeAwarePlanner : public nav2_core::GlobalPlanner
   }
 
 public:
+  ~TimeAwarePlanner() override {stopPrefetch();}
   void configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
                  std::string name,std::shared_ptr<tf2_ros::Buffer>,
                  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override
@@ -214,33 +308,54 @@ public:
         robot_stamp_=node_->now().seconds();
       });
     debug_pub_=node_->create_publisher<std_msgs::msg::String>("/known_timed_plan",10);
+    prefetch_pub_=node_->create_publisher<std_msgs::msg::String>("/return_prefetch_status",20);
+    prefetch_sub_=node_->create_subscription<std_msgs::msg::Float64MultiArray>(
+      "/return_prefetch_request",10,
+      std::bind(&TimeAwarePlanner::prefetchRequest,this,std::placeholders::_1));
     RCLCPP_INFO(node_->get_logger(),"Known-motion planner: continuous SE2/time search, no waiting actions");
   }
-  void activate() override {debug_pub_->on_activate();}
-  void deactivate() override {debug_pub_->on_deactivate();}
-  void cleanup() override {motion_subs_.clear();map_sub_.reset();odom_sub_.reset();robot_sub_.reset();grid_.reset();heuristic_cache_.clear();}
+  void activate() override {
+    debug_pub_->on_activate();prefetch_pub_->on_activate();
+    prefetch_stopping_=false;prefetch_thread_=std::thread([this]{prefetchLoop();});
+  }
+  void deactivate() override {stopPrefetch();prefetch_pub_->on_deactivate();debug_pub_->on_deactivate();}
+  void cleanup() override {
+    stopPrefetch();prefetch_sub_.reset();prefetch_pub_.reset();
+    motion_subs_.clear();map_sub_.reset();odom_sub_.reset();robot_sub_.reset();
+    grid_.reset();heuristic_cache_.clear();
+  }
 
   nav_msgs::msg::Path createPlan(const geometry_msgs::msg::PoseStamped & start,
                                 const geometry_msgs::msg::PoseStamped & goal) override
+  {return plan(start,goal);}
+
+  nav_msgs::msg::Path plan(const geometry_msgs::msg::PoseStamped & start,
+                          const geometry_msgs::msg::PoseStamped & goal,
+                          PreparedRoute * preparing=nullptr)
   {
     const auto began=std::chrono::steady_clock::now();
     const double now=node_->now().seconds();
     nav_msgs::msg::Path result;result.header.frame_id=frame_;result.header.stamp=node_->now();
     std::shared_ptr<Grid> grid;std::vector<Observation> observed;double current_speed,robot_stamp;Pose2 world;
+    bool speed_fresh=false;
     {
       std::lock_guard<std::mutex> lock(data_mutex_);
       grid=grid_;observed=observations_;world=robot_world_;robot_stamp=robot_stamp_;
       current_speed=now-odom_stamp_<.5 ? robot_speed_ : 0.;
+      speed_fresh=now>=odom_stamp_-.10 && now-odom_stamp_<=.20;
     }
     if(!grid || start.header.frame_id!=frame_ || goal.header.frame_id!=frame_) return result;
     unsigned gx,gy,sx,sy;
     if(!grid->map->worldToMap(goal.pose.position.x,goal.pose.position.y,gx,gy) ||
        !grid->map->worldToMap(start.pose.position.x,start.pose.position.y,sx,sy)) return result;
-    const auto guide=heuristic(grid,gy*grid->w+gx);
+    std::vector<float> guide;
+    if(preparing) field(grid,guide,{gy*grid->w+gx},false,slow_near_static_obstacles_,speed_,preferred_static_clearance_,wall_clearance_weight_);
+    else guide=heuristic(grid,gy*grid->w+gx);
     if(guide[sy*grid->w+sx]>=1e8) return result;
     geometry_msgs::msg::PoseStamped robot;
-    const bool virtual_start=costmap_ros_->getRobotPose(robot) &&
-      std::hypot(robot.pose.position.x-start.pose.position.x,robot.pose.position.y-start.pose.position.y)>.75;
+    const bool virtual_start=preparing || (costmap_ros_->getRobotPose(robot) &&
+      std::hypot(robot.pose.position.x-start.pose.position.x,robot.pose.position.y-start.pose.position.y)>.75);
+    if(preparing) current_speed=0.;
     const bool dynamic=!virtual_start && !motions_.empty();
     const Pose2 start_pose{start.pose.position.x,start.pose.position.y,tf2::getYaw(start.pose.orientation)};
     FrameAlignment alignment{start_pose,start_pose};
@@ -286,6 +401,48 @@ public:
     };
     const double start_yaw=tf2::getYaw(start.pose.orientation),goal_yaw=tf2::getYaw(goal.pose.orientation);
     if(!valid(start.pose.position.x,start.pose.position.y,start_yaw,0)) return result;
+    if(!preparing && !virtual_start && speed_fresh) {
+      std::optional<PreparedRoute> cached;
+      {
+        std::lock_guard<std::mutex> lock(prefetch_mutex_);
+        if(prepared_ && prepared_->grid==grid && prepared_->generation==prefetch_generation_)
+          cached=prepared_;
+      }
+      const Pose2 goal_pose{goal.pose.position.x,goal.pose.position.y,goal_yaw};
+      if(cached && prepared_endpoints_match(start_pose,goal_pose,cached->start,cached->goal,
+          current_speed,std::chrono::duration<double>(began-cached->created).count())) {
+        // Validation uses NEW world alignment and NEW actor forecasts from
+        // this foreground call. Old forecasts are never stored in the cache.
+        double delay=0.;
+        const bool clear=validate_prepared_route(cached->samples,start_pose,cached->start,
+          accel_,decel_,max_angular_velocity_,angular_acceleration_,angular_deceleration_,valid,delay);
+        const double checked_at=node_->now().seconds();
+        bool fresh=checked_at>=now && checked_at-now<=.10;
+        {
+          std::lock_guard<std::mutex> lock(data_mutex_);
+          fresh=fresh && grid_==grid && checked_at-robot_stamp_<=.20 && checked_at>=robot_stamp_-.10;
+          fresh=fresh && checked_at-odom_stamp_<=.20 && checked_at>=odom_stamp_-.10;
+          for(const auto & observation:observations_)
+            fresh=fresh && observation.valid && checked_at-observation.stamp<=.35 && checked_at>=observation.stamp-.15;
+        }
+        // Cancellation/map changes during the check also revoke the result.
+        if(clear && fresh && cached->generation==prefetch_generation_) {
+          result.poses.push_back(start);
+          auto append=[&](double x,double y,double yaw) {
+            geometry_msgs::msg::PoseStamped p;p.header=result.header;
+            p.pose.position.x=x;p.pose.position.y=y;
+            tf2::Quaternion q;q.setRPY(0,0,yaw);p.pose.orientation=tf2::toMsg(q);
+            result.poses.push_back(p);
+          };
+          append(cached->start.x,cached->start.y,cached->start.yaw);
+          for(const auto & n:cached->samples) append(n.x,n.y,n.yaw);
+          prefetchEvent("reused",cached->generation,
+            std::chrono::duration<double>(std::chrono::steady_clock::now()-began).count());
+          return result;
+        }
+        prefetchEvent("rejected",cached->generation);
+      }
+    }
     using Item=std::pair<double,int>;
     std::priority_queue<Item,std::vector<Item>,std::greater<Item>> open;
     std::vector<SearchNode> nodes;nodes.reserve(120000);
@@ -319,7 +476,10 @@ public:
       const auto [priority,index]=open.top();(void)priority;open.pop();
       const SearchNode parent=nodes[index];
       if(parent.g>best[key(parent.x,parent.y,parent.heading,parent.t)]+1e-6) continue;
-      if(++iterations%128==0 && std::chrono::duration<double>(std::chrono::steady_clock::now()-began).count()>limit_) break;
+      if(++iterations%128==0) {
+        if(preparing && (prefetch_stopping_ || preparing->generation!=prefetch_generation_)) return result;
+        if(std::chrono::duration<double>(std::chrono::steady_clock::now()-began).count()>limit_) break;
+      }
       if(nodes.size()>600000) break;
       const double distance=std::hypot(parent.x-goal.pose.position.x,parent.y-goal.pose.position.y);
       if(distance<.13) {
@@ -373,6 +533,17 @@ public:
     }
     std::vector<int> chain;for(int index=found;index>=0;index=nodes[index].parent) chain.push_back(index);
     std::reverse(chain.begin(),chain.end());
+    if(preparing) {
+      preparing->grid=grid;preparing->start=start_pose;
+      preparing->goal={goal.pose.position.x,goal.pose.position.y,goal_yaw};
+      preparing->created=std::chrono::steady_clock::now();
+      for(int index:chain) {
+        const auto & n=nodes[index];preparing->samples.push_back({n.x,n.y,n.yaw,n.t,n.v});
+      }
+      const auto & last=nodes[found];
+      preparing->samples.push_back({goal.pose.position.x,goal.pose.position.y,goal_yaw,
+        last.t+turnTime(goal_yaw-last.yaw),0.});
+    }
     if(dynamic) {
       // Revalidate against the latest state after search latency, from the
       // measured progress on the route. Never publish an already stale plan.
