@@ -114,7 +114,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     stable = ET.parse(ROOT/'src/yzbot/mybot_description/worlds/room.world').getroot().find('world')
     imported = ET.parse(ROOT/'scenarios/usb_office_20261007/original/offic_room.world').getroot().find('world')
-    root = ET.Element('sdf', version='1.4')
+    root = ET.Element('sdf', version='1.6')
     world = ET.SubElement(root, 'world', name='default')
     for tag in ['light', 'physics']:
         world.append(copy.deepcopy(stable.find(tag)))
@@ -192,8 +192,14 @@ def main():
         world.append(copy.deepcopy(plugin))
     gui = ET.SubElement(world, 'gui', fullscreen='0')
     camera = ET.SubElement(gui, 'camera', name='user_camera')
-    ET.SubElement(camera, 'pose').text = '9 -15 19 0 0.75 2.15'
+    ET.SubElement(camera, 'pose').text = '0 0 20 0 1.5707963267948966 0'
     ET.SubElement(camera, 'view_controller').text = 'orbit'
+    # Translate with the robot while keeping a vertical, world-aligned view.
+    track = ET.SubElement(camera, 'track_visual')
+    for key, value in [('name', 'six_arm'), ('static', 'true'),
+                       ('use_model_frame', 'true'), ('xyz', '0 0 20'),
+                       ('inherit_yaw', 'false')]:
+        ET.SubElement(track, key).text = value
     tree = ET.ElementTree(root)
     ET.indent(tree, space='  ')
 

@@ -102,7 +102,7 @@ def runtime_file(variable, relative):
     raise RuntimeError(f'Set {variable}; missing {relative}')
 
 
-def start(headless):
+def start(headless, show_rviz=False):
     if any(group_alive(pid) for pid in load().values()):
         raise RuntimeError('Project already running; use status or restart')
     if subprocess.run(['pgrep', '-x', 'gzserver'], stdout=subprocess.DEVNULL).returncode == 0:
@@ -152,6 +152,12 @@ def start(headless):
         wait(lambda: ros_check(['topic', 'info', '/command'], 'Subscription count: 1'), '/command parser', state)
         wait(lambda: ros_check(['topic', 'info', '/nav_done_cargo'], 'Subscription count: 1'), 'arm subscriber', state)
         wait(lambda: ros_check(['node', 'list'], '/rosbridge_websocket'), 'rosbridge', state)
+        if show_rviz:
+            spawn('12_bright_map', ['ros2', 'run', 'bot_navigation', 'bright_costmap.py',
+                                    '--ros-args', '-p', 'use_sim_time:=true'])
+            spawn('11_rviz', ['ros2', 'run', 'rviz2', 'rviz2',
+                              '-d', str(nav / 'rviz' / 'nav2_default_view.rviz'),
+                              '--ros-args', '-p', 'use_sim_time:=true'])
         print('Ready. Publish natural language on /command. Logs: ' + str(RUN))
     except BaseException:
         stop()
@@ -162,7 +168,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('command', nargs='?', default='start', choices=['start', 'restart', 'stop', 'status', 'logs'])
     parser.add_argument('module', nargs='?')
-    parser.add_argument('--headless', '--headlees', action='store_true')
+    display = parser.add_mutually_exclusive_group()
+    display.add_argument('--headless', '--headlees', action='store_true')
+    display.add_argument('--rviz', action='store_true',
+                         help='Open Gazebo and the navigation RViz view together')
     args = parser.parse_args()
     def interrupted(*_):
         raise KeyboardInterrupt
@@ -183,7 +192,7 @@ def main():
     else:
         if args.command == 'restart':
             stop()
-        start(args.headless)
+        start(args.headless, args.rviz)
 
 
 if __name__ == '__main__':

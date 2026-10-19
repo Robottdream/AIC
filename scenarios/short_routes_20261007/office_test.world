@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<sdf version="1.4">
+<sdf version="1.6">
   <world name="default">
     <light name="sun" type="directional">
       <cast_shadows>1</cast_shadows>
@@ -3368,8 +3368,15 @@
     <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so" />
     <gui fullscreen="0">
       <camera name="user_camera">
-        <pose>9 -15 19 0 0.75 2.15</pose>
+        <pose>0 0 20 0 1.5707963267948966 0</pose>
         <view_controller>orbit</view_controller>
+        <track_visual>
+          <name>six_arm</name>
+          <static>true</static>
+          <use_model_frame>true</use_model_frame>
+          <xyz>0 0 20</xyz>
+          <inherit_yaw>false</inherit_yaw>
+        </track_visual>
       </camera>
     </gui>
   </world>

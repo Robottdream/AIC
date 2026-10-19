@@ -43,3 +43,11 @@ runtime/
 *.onnx
 *.pt
 *.pth
+
+# Other projects and vendor downloads stored locally beside AIC sources
+/AIC_USB_robottdream/
+/RM2025-Radar-Algorithm/
+/TensorRT-10.8.0.43/
+/my_nav_ws_2/
+/pfa_vision_radar-master/
+/r8168-8.056.02/

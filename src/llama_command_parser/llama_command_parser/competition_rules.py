@@ -10,7 +10,7 @@ RULES = {
     3: '较大的数值代表蓝色，较小的代表红色；蓝色去B区，红色去C区',
 }
 NUMBER = r'(?:\d+|[零〇一二两三四五六七八九十百千]+)'
-CONTAINERS = r'(?:衣柜|书箱|礼品盒|礼盒|箱|盒)'
+CONTAINERS = r'(?:衣柜|书箱|礼品盒|礼盒|玩具箱|箱|盒)'
 UNITS = r'(?:件|条|本|个|颗|粒)'
 
 
@@ -98,7 +98,7 @@ def solve_container_problem(problem):
     capacity_match = re.search(
         rf'每(?:个|箱)?({CONTAINERS})(?:里|中)?(?:有|装|可装|能装)({NUMBER}){UNITS}', text)
     if not capacity_match:
-        raise ValueError('未识别容器容量，请保留“每个衣柜/书箱/礼品盒有N件/本/个物品”等完整描述')
+        raise ValueError('未识别容器容量，请保留“每个衣柜/书箱/礼品盒/玩具箱有N件/本/个物品”等完整描述')
     capacity = number(capacity_match[2])
     if capacity == 0:
         raise ValueError('每柜/箱容量必须大于零')
@@ -108,6 +108,7 @@ def solve_container_problem(problem):
     # In “软糖礼盒数量”, 礼盒 is the suffix; do not include 礼 in the item.
     definition_container = ('箱' if capacity_match[1] in ('箱', '书箱') else
                             r'(?:礼品盒|礼盒|盒)' if capacity_match[1] in ('礼品盒', '礼盒', '盒') else
+                            '玩具箱' if capacity_match[1] == '玩具箱' else
                             '衣柜')
     for match in re.finditer(
             rf'(?:^|[，,；;。])(?:设)?([\u4e00-\u9fffA-Za-z]{{1,16}}?)'
@@ -121,17 +122,21 @@ def solve_container_problem(problem):
             raise ValueError(f'{var}的定义不唯一')
         definitions[var] = item
     if set(definitions) != {'x', 'y'} or definitions['x'] == definitions['y']:
-        raise ValueError('请包含题末x、y分别代表哪类衣柜/书箱/礼盒的定义')
-    aliases = '|'.join(map(re.escape, definitions.values()))
+        raise ValueError('请包含题末x、y分别代表哪类衣柜/书箱/礼盒/玩具箱的定义')
+    aliases = '|'.join(map(re.escape, sorted(definitions.values(), key=len, reverse=True)))
     demand_pattern = rf'({NUMBER}){UNITS}({aliases})'
     body = text.split('设', 1)[0]
     clauses = [clause for clause in re.split(r'[;；。\n]', body) if clause]
     records, pending = {}, []
     for clause in clauses:
-        names = list(dict.fromkeys(re.findall(r'小[\u4e00-\u9fff]', clause)))
+        # “小车” is a declared item, not a second person in “小杰想玩2个小车”.
+        # Mask item names in the header, quantities and replacements before
+        # finding the subject/reference names; keep the original demand text.
+        people_text = re.sub(rf'(?:{aliases})', '', clause)
+        names = list(dict.fromkeys(re.findall(r'小[\u4e00-\u9fff]', people_text)))
         if names:
             pending.append((clause, names))
-        elif re.search(r'想要|需要|需求|少|多', clause):
+        elif re.search(r'想要|想玩|需要|需求|少|多', clause):
             raise ValueError(f'未识别需求人物：{clause}')
     if not pending:
         raise ValueError('未识别人物需求，不能猜测x、y')
@@ -167,7 +172,7 @@ def solve_container_problem(problem):
             else:
                 subjects = names
                 found = re.findall(demand_pattern, clause)
-                if not found or not re.search(r'想要|需要|需|都要|要', clause):
+                if not found or not re.search(r'想要|想玩|需要|需|都要|要', clause):
                     raise ValueError(f'未识别完整需求：{clause}')
                 counts = {item: 0 for item in definitions.values()}
                 for amount, item in found:

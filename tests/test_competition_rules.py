@@ -31,9 +31,39 @@ GIFTS = ('每个礼品盒有5个糖果;有软糖、硬糖两种礼品盒。'
          '小兰要1个硬糖;小玉也和小红一样但是换成硬糖;小华想要5个软糖，1个硬糖。'
          '设软糖礼盒数量为x,硬糖礼盒数量为y,计算x、y。')
 GIFT_RULE = 'x代表红色,y代表蓝色;数值大于等于3的去A区,其他颜色去C区'
+TOYS = ('每个玩具箱有5个玩具;有小车、积木两种玩具箱;'
+        '小杰想玩2个小车,5个积木;小乐、小欣都想玩2个小车;'
+        '小琪想玩3个小车,5个积木;小浩想玩4个积木。'
+        '设小车玩具箱数量为x,积木玩具箱数量为y,计算x、y分别为多少。')
 
 
 class RulesTests(unittest.TestCase):
+    def test_toy_boxes_do_not_treat_small_car_as_person(self):
+        result = solve_container_problem(TOYS)
+        self.assertEqual(result['definitions'], {'x': '小车', 'y': '积木'})
+        self.assertEqual(result['totals'], {'小车': 9, '积木': 14})
+        self.assertEqual(result['answers'], {'x': 2, 'y': 3})
+        self.assertEqual({r['name'] for r in result['demands']},
+                         {'小杰', '小乐', '小欣', '小琪', '小浩'})
+        p, rule = parse_input(TOYS + GIFT_RULE)
+        self.assertEqual(CompetitionSession().prepare(p, rule, INVENTORY)['tasks'],
+                         [dict(color='red', num=2, to='C'), dict(color='blue', num=3, to='A')])
+
+    def test_toy_box_references_replacements_and_variable_swap(self):
+        problem = ('每个玩具箱有5个玩具;有小车、积木两种玩具箱;'
+                   '小杰想玩2个小车;小乐和小杰一样但是换成积木;'
+                   '小欣和小杰一样;小琪想玩3个小车。'
+                   '设积木玩具箱数量为x,小车玩具箱数量为y。')
+        result = solve_container_problem(problem)
+        self.assertEqual(result['totals'], {'积木': 2, '小车': 7})
+        self.assertEqual(result['answers'], {'x': 1, 'y': 2})
+        changed = TOYS.replace('小浩想玩4个积木', '小浩想玩1个积木')
+        self.assertEqual(solve_container_problem(changed)['answers'], {'x': 2, 'y': 3})
+        changed = TOYS.replace('小浩想玩4个积木', '小浩想玩6个积木')
+        self.assertEqual(solve_container_problem(changed)['answers'], {'x': 2, 'y': 4})
+        with self.assertRaises(ValueError):
+            solve_container_problem(TOYS.replace('3个小车', '3个玩偶'))
+
     def test_gift_boxes_with_full_written_mapping(self):
         problem, rule = parse_input(GIFTS + ' ' + GIFT_RULE)
         self.assertEqual((problem, rule), (GIFTS, 1))
@@ -180,6 +210,18 @@ def parser_callbacks():
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_toy_box_preview_does_not_start_old_or_new_task(self):
+        node = parser_callbacks()
+        node.problem_callback(NS(data=WARDROBE))
+        old_id = node.competition_session.pending['preview_id']
+        node.problem_callback(NS(data=TOYS + GIFT_RULE))
+        preview = json.loads(node.preview_pub.messages[-1])
+        self.assertEqual(preview['solution']['answers'], {'x': 2, 'y': 3})
+        self.assertEqual(node.chat_pub.messages, [])
+        node.competition_start_callback(NS(data=json.dumps(dict(preview_id=old_id, confirm=True))))
+        self.assertEqual(node.chat_pub.messages, [])
+        self.assertNotEqual(preview['preview_id'], old_id)
+
     def test_gift_preview_remains_confirmation_only(self):
         node = parser_callbacks()
         node.problem_callback(NS(data=GIFTS + '\n' + GIFT_RULE))

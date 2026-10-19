@@ -31,6 +31,19 @@ bash test_map.sh short_routes_20261007 start --headless
 
 Foxglove 使用 Rosbridge，地址 `ws://127.0.0.1:8765`。`test_map.sh` 默认使用端口 8765，显式设置的 `AIC_ROSBRIDGE_PORT` 优先。
 
+## 同时打开 Gazebo 和 RViz
+
+2026-10-19 新增 `--rviz` 选项，使用导航 RViz 配置。已有程序需复位时执行：
+
+```bash
+cd "/home/root123/桌面/AIC"
+bash start_competition.sh restart --rviz
+```
+
+首次启动使用 `bash start_competition.sh start --rviz`。
+`--rviz` 与 `--headless` 互斥；启动后仍等待人工发令。
+RViz 与其他组件一起由启动器管理，`stop` 会一并关闭。
+
 ## 普通搬运测试任务
 
 另开终端，直接指定颜色、数量和区域：
