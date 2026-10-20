@@ -52,13 +52,19 @@ def stop():
 
 
 def wait(check, label, state, limit=90):
-    deadline = time.monotonic() + limit
+    started = time.monotonic()
+    deadline = started + limit
+    next_notice = started + 10
     while time.monotonic() < deadline:
         if not all(alive(pid) for pid in state.values()):
             raise RuntimeError(f'Process exited while waiting for {label}; see {RUN}')
         if check():
             print(f'[ready] {label}', flush=True)
             return
+        now = time.monotonic()
+        if now >= next_notice:
+            print(f'[waiting] {label} ({int(now - started)}s); logs: {RUN}', flush=True)
+            next_notice = now + 10
         time.sleep(2)
     raise RuntimeError(f'Timed out waiting for {label}; see {RUN}')
 

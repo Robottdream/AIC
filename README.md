@@ -42,6 +42,8 @@ bash ros_competition_start.sh stop
 
 构建入口始终使用 `colcon build --symlink-install --base-paths src`。`--headless` 关闭 Gazebo 客户端和 RViz，保留仿真与可视化数据；兼容此前拼写 `--headlees`。
 
+入口在项目子进程中将系统`/usr/bin`、`/bin`放到PATH前部并清除`PYTHONHOME`/`VIRTUAL_ENV`，再加载ROS环境，避免`spawn_entity.py`的`env python3`选到unblob等虚拟环境后缺numpy。不会修改终端配置或给其他虚拟环境安装ROS依赖。启动等待时每约10秒显示正在等待的项目；若机器人生成失败，详细错误见`log/run/01_gazebo.log`。
+
 `start` 等待人工通过 `/command` 发自然语言任务。只有显式 `benchmark` 才自动发送三红 A、两蓝 B 的五件任务：
 
 ```bash

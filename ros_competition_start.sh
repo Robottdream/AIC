@@ -2,11 +2,17 @@
 set -eo pipefail
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$WS"
+# Humble's apt-installed ROS Python nodes need Ubuntu's system interpreter.
+# Gazebo's spawn_entity.py uses /usr/bin/env python3, so changing only this
+# script's interpreter is insufficient. Scope the PATH fix to this process tree.
+unset PYTHONHOME VIRTUAL_ENV
+export PYTHONNOUSERSITE=1
+# WSL also inherits Windows PATH; avoid CMake searching Windows SDKs via DrvFs.
+export PATH="$(/usr/bin/python3 -c 'import os; print(":".join(dict.fromkeys(["/usr/bin", "/bin"] + [p for p in os.environ["PATH"].split(":") if p and not p.startswith(("/mnt/c/", "/mnt/d/", "/mnt/e/"))])))')"
 case "${1:-start}" in
   -h|--help) echo 'Usage: ./ros_competition_start.sh start|stop|status|restart|logs|build|benchmark [--headless]'; exit 0 ;;
   stop|status|logs) exec python3 "$WS/tools/project_launcher.py" "$@" ;;
 esac
-export PYTHONNOUSERSITE=1
 # Use one scene for Gazebo, the map, task coordinates and controller settings.
 # Explicit overrides remain available for other scenes and isolated tests.
 AIC_SCENE_ROOT="$WS/scenarios/${AIC_SCENE:-short_routes_20261007}"
@@ -25,8 +31,6 @@ printf 'World: %s\nMap: %s\nTasks: %s\nNav2: %s\n' "$AIC_WORLD" "$AIC_MAP" "$AIC
 if [[ -n "${WSL_DISTRO_NAME:-}" && "${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}" == rmw_fastrtps_cpp && -z "${FASTRTPS_DEFAULT_PROFILES_FILE:-}" && -z "${FASTDDS_DEFAULT_PROFILES_FILE:-}" ]]; then
   export FASTRTPS_DEFAULT_PROFILES_FILE="$WS/tools/fastdds_wsl_udp.xml"
 fi
-# WSL inherits Windows PATH; CMake otherwise searches Windows SDK trees via DrvFs.
-export PATH="$(python3 -c 'import os; print(":".join(p for p in os.environ["PATH"].split(":") if not p.startswith(("/mnt/c/", "/mnt/d/", "/mnt/e/"))))')"
 source /opt/ros/humble/setup.bash
 if [[ "${1:-}" == build || ! -f "$WS/install/setup.bash" ]]; then
   colcon build --symlink-install --base-paths "$WS/src"
