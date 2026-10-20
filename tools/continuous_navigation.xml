@@ -3,22 +3,15 @@
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
     <RecoveryNode number_of_retries="3" name="NavigateRecovery">
-      <PipelineSequence name="NavigateWithLivePrediction">
-        <RateController hz="5.0">
-          <!-- A failed new search must not erase the currently executing path.
-               The controller still validates every command against live actors. -->
-          <ForceSuccess>
-            <Sequence name="CommitSuccessfulPlan">
-              <ComputePathToPose goal="{goal}" path="{candidate_path}" planner_id="GridBased"/>
-              <SetBlackboard value="{candidate_path}" output_key="path"/>
-            </Sequence>
-          </ForceSuccess>
-        </RateController>
+      <!-- First plan must succeed for each goal/execution. Later failed
+           searches retain that goal's path while live command guards run. -->
+      <CurrentGoalNavigation goal="{goal}" candidate_path="{candidate_path}" path="{path}" hz="5.0">
+        <ComputePathToPose goal="{goal}" path="{candidate_path}" planner_id="GridBased"/>
         <RecoveryNode number_of_retries="1" name="FollowPath">
           <FollowPath path="{path}" controller_id="FollowPath"/>
           <ClearEntireCostmap name="ClearLocal" service_name="local_costmap/clear_entirely_local_costmap"/>
         </RecoveryNode>
-      </PipelineSequence>
+      </CurrentGoalNavigation>
       <ReactiveFallback name="RecoveryFallback">
         <GoalUpdated/>
         <Sequence name="RefreshCostmaps">

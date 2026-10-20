@@ -102,6 +102,25 @@ def runtime_file(variable, relative):
     raise RuntimeError(f'Set {variable}; missing {relative}')
 
 
+def configure_first_plan_tree(navigation):
+    """Delegate the precheck only to the project's explicit guarded tree."""
+    planner = navigation.get('planner_server', {}).get('ros__parameters', {}).get('GridBased', {})
+    if planner.get('plugin') != 'aic_timed_planner/TimeAwarePlanner':
+        return ''
+    bt = navigation['bt_navigator']['ros__parameters']
+    guarded = ROOT / 'tools' / 'continuous_navigation.xml'
+    selected = bt.setdefault('default_nav_to_pose_bt_xml', str(guarded))
+    if not selected or Path(selected).resolve() != guarded.resolve():
+        return ''
+    libraries = bt.get('plugin_lib_names')
+    if not isinstance(libraries, list):
+        raise RuntimeError('Guarded navigation requires an explicit plugin_lib_names list')
+    plugin = 'aic_current_goal_navigation_bt_node'
+    if plugin not in libraries:
+        libraries.append(plugin)
+    return str(guarded)
+
+
 def start(headless):
     if any(group_alive(pid) for pid in load().values()):
         raise RuntimeError('Project already running; use status or restart')
@@ -136,9 +155,8 @@ def start(headless):
         import yaml
         navigation = yaml.safe_load(Path(nav_params).read_text())
         planner = navigation.get('planner_server', {}).get('ros__parameters', {}).get('GridBased', {})
+        first_plan_tree = configure_first_plan_tree(navigation)
         if planner.get('plugin') == 'aic_timed_planner/TimeAwarePlanner':
-            bt = navigation['bt_navigator']['ros__parameters']
-            bt.setdefault('default_nav_to_pose_bt_xml', str(ROOT / 'tools' / 'continuous_navigation.xml'))
             resolved = RUN / 'nav2-resolved.yaml'
             resolved.write_text(yaml.safe_dump(navigation, sort_keys=False))
             nav_params = str(resolved)
@@ -147,7 +165,12 @@ def start(headless):
         spawn('04_llama', [binary, '-m', model, '-c', '2048', '--threads', '8', '--port', '8081'])
         wait(llama_ok, 'llama /health', state)
         for name, package, executable in [('05_parser', 'llama_command_parser', 'command_parser'), ('06_nav', 'nav_simple', 'simple_navigator'), ('07_arm', 'arm_action_integration', 'arm_grab_place_node'), ('08_detector', 'package_detector', 'color_detector_node'), ('09_main', 'main_controller', 'main_controller_node')]:
-            spawn(name, ['ros2', 'run', package, executable, *node_arguments] if name in ('06_nav', '07_arm', '09_main') else ['ros2', 'run', package, executable])
+            arguments = list(node_arguments) if name in ('06_nav', '07_arm', '09_main') else []
+            if name == '06_nav' and first_plan_tree:
+                if not arguments:
+                    arguments = ['--ros-args']
+                arguments += ['-p', f'initial_plan_bt_xml:={first_plan_tree}']
+            spawn(name, ['ros2', 'run', package, executable, *arguments])
         spawn('10_rosbridge', ['ros2', 'launch', str(ROOT / 'tools' / 'rosbridge_safe.launch.py')])
         wait(lambda: ros_check(['topic', 'info', '/command'], 'Subscription count: 1'), '/command parser', state)
         wait(lambda: ros_check(['topic', 'info', '/nav_done_cargo'], 'Subscription count: 1'), 'arm subscriber', state)

@@ -22,6 +22,8 @@ class SimpleNav2Navigator(Node):
     def __init__(self):
         super().__init__("simple_nav2_navigator")
         self.set_parameters([Parameter("use_sim_time", value=True)])
+        # Nonempty only when the launcher selects the guarded first-plan tree.
+        self.initial_plan_bt_xml = self.declare_parameter("initial_plan_bt_xml", "").value
         
         # 初始化Nav2动作客户端
         self.nav_client = ActionClient(self, NavigateToPose, "/navigate_to_pose")
@@ -31,7 +33,7 @@ class SimpleNav2Navigator(Node):
             rclpy.shutdown()
             return
         
-        if not self.plan_client.wait_for_server(timeout_sec=40.0):
+        if not self.initial_plan_bt_xml and not self.plan_client.wait_for_server(timeout_sec=40.0):
             self.get_logger().error("Nav2路径规划服务未启动！")
             rclpy.shutdown()
             return
@@ -500,6 +502,8 @@ class SimpleNav2Navigator(Node):
 
     def send_goal(self, x, y, yaw, request_id):
         """发送导航目标"""
+        if request_id != self.request_id or self.emergency_stop_active:
+            return
         # 构造位姿消息
         goal_msg = NavigateToPose.Goal()
         pose = PoseStamped()
@@ -518,6 +522,12 @@ class SimpleNav2Navigator(Node):
         goal_msg.pose = pose
         self.goal_pose = pose
         self.near_goal_started = None
+
+        if self.initial_plan_bt_xml:
+            goal_msg.behavior_tree = self.initial_plan_bt_xml
+            self.get_logger().info("首次查路交由导航树执行，通过前不启动路径跟随")
+            self._start_navigation(goal_msg, request_id)
+            return
 
         # 先在当前代价地图上验证目标是否有路径，避免盲目跑向固定抓取点。
         plan_goal = ComputePathToPose.Goal()
@@ -568,7 +578,7 @@ class SimpleNav2Navigator(Node):
     def _launch_navigation(self, nav_goal, request_id):
         if request_id != self.request_id or self.emergency_stop_active:
             return
-        self.get_logger().info("路径检查通过，开始导航")
+        self.get_logger().info("提交导航目标，等待导航树规划与执行")
         nav_future = self.nav_client.send_goal_async(
             nav_goal, feedback_callback=lambda msg: self.feedback_callback(msg, request_id)
         )

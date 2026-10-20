@@ -27,6 +27,11 @@ def runtime_check(folder,nav,tasks):
             for (key,expected),value in zip(values.items(),query(target,list(values))):
                 actual=list(value.double_array_value) if value.type==8 else value.double_value
                 assert actual==expected,(target,key,actual,expected);proof[target+'.'+key]=actual
+        initial_tree=query('/simple_nav2_navigator',['initial_plan_bt_xml'])[0].string_value
+        assert initial_tree==str(ROOT/'tools/continuous_navigation.xml'),initial_tree
+        libraries=list(query('/bt_navigator',['plugin_lib_names'])[0].string_array_value)
+        assert 'aic_current_goal_navigation_bt_node' in libraries
+        proof['initial_plan_bt_xml']=initial_tree;proof['bt_plugin_lib_names']=libraries
         desc=query('/robot_state_publisher',['robot_description'])[0].string_value
         (folder/'live-robot.urdf').write_text(desc);robot=ET.fromstring(desc);plugin=robot.find("gazebo/plugin[@name='body_force_controller']")
         assert plugin is not None and robot.find("gazebo/plugin[@name='differential_drive_controller']") is None
@@ -58,9 +63,10 @@ def main():
     (out/'protocol.json').write_text(json.dumps(dict(force_limits=force_limits,repeats=args.repeats,linear_speed=nav['velocity_smoother']['ros__parameters']['max_velocity'][0],angular_speed=nav['velocity_smoother']['ros__parameters']['max_velocity'][2],acceleration=nav['velocity_smoother']['ros__parameters']['max_accel'],deceleration=nav['velocity_smoother']['ros__parameters']['max_decel'],method='Independent cold starts; current configuration, no inter-trial tuning; headless; task events and raw poll timings retained'),indent=2))
     sources=[HERE/'repeat_flow.py',HERE/'native_probe.cpp',ROOT/'tools/benchmark_delivery.py',ROOT/'tools/record_navigation.py',ROOT/'src/aic_body_drive/src/body_drive.cpp',ROOT/'src/yzbot/mybot_description/urdf/originbot_with_arm_gazebo.xacro',ROOT/'src/nav_simple/nav_simple/simple_navigator.py']+list((ROOT/'src/aic_timed_planner/src').glob('*.cpp'))+list((ROOT/'src/aic_timed_planner/include').rglob('*.hpp'))
     sources += list((ROOT/'src/main_controller/main_controller').glob('*.py'))
+    sources += [ROOT/'tools/continuous_navigation.xml',ROOT/'tools/project_launcher.py']
     for source in sources:
         target=out/'source-snapshot'/source.relative_to(ROOT);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,target)
-    binaries=[ROOT/'install/aic_timed_planner/lib/libaic_timed_planner.so',ROOT/'install/aic_body_drive/lib/libaic_body_drive.so']
+    binaries=[ROOT/'install/aic_timed_planner/lib/libaic_timed_planner.so',ROOT/'install/aic_body_drive/lib/libaic_body_drive.so',ROOT/'install/aic_timed_planner/lib/libaic_current_goal_navigation_bt_node.so']
     hashes={str(f.relative_to(ROOT)):hashlib.sha256(f.read_bytes()).hexdigest() for f in sources+binaries};(out/'source-binary-hashes.json').write_text(json.dumps(hashes,indent=2))
     flags=shlex.split(subprocess.check_output(['pkg-config','--cflags','--libs','gazebo'],text=True));subprocess.run(['g++','-shared','-fPIC','-std=c++17',str(HERE/'native_probe.cpp'),'-o',str(out/'libnative_probe.so'),*flags],check=True)
     env=os.environ.copy()
